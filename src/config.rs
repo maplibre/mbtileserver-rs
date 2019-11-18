@@ -1,3 +1,4 @@
+use std::fs::read_dir;
 use std::path::PathBuf;
 
 extern crate clap;
@@ -27,12 +28,15 @@ pub fn parse<'a>() -> Args {
         .get_matches();
 
     let port = match matches.value_of("port") {
-        Some(p) => p.parse::<u16>().unwrap_or(3000),
+        Some(p) => p.parse::<u16>().expect("Port must be a positive number"),
         None => 3000,
     };
 
+    let directory = PathBuf::from(matches.value_of("directory").unwrap_or("tiles"));
+    read_dir(directory.clone()).expect("Directory does not exists");
+
     Args {
-        directory: PathBuf::from(matches.value_of("directory").unwrap_or("tiles")),
+        directory,
         port,
     }
 }

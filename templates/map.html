@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+<head lang="en">
+    <meta charset="UTF-8">
+    <title>{{ ID }} Preview</title>
+    <script src="/static/dist/core.min.js"></script>
+    <link href="/static/dist/core.min.css" rel="stylesheet" />
+    <style>
+        html {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+        }
+
+        h4 {
+            margin: 0;
+        }
+
+        #Map {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            border-top: 2px solid #AAA;
+        }
+
+        .basemap img {
+            width: 36px;
+        }
+
+        .info {
+            padding: 6px 8px;
+            font: 14px/16px Arial, Helvetica, sans-serif;
+            background: white;
+            background: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            position: absolute;
+            z-index: 2000;
+            top: 10px;
+            right: 10px;
+        }
+
+        .info h3 {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="Map"></div>
+    <script>
+        var map = L.map('Map', {
+            center: [0, 0],
+            zoom: 1
+        });
+
+        var layer = L.tileLayer('{{ URL | safe }}');
+        map.addLayer(layer);
+    </script>
+</body>
+
+</html>

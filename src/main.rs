@@ -1,5 +1,11 @@
 extern crate hyper;
+#[macro_use]
+extern crate lazy_static;
 extern crate pretty_env_logger;
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate tera;
 
 use hyper::rt::{self, Future};
 use hyper::service::service_fn_ok;
@@ -16,18 +22,14 @@ fn main() {
 
     println!("Serving tiles from {}", args.directory.display());
 
-    let connections = tiles::get_connections(&args.directory);
-
-    println!("{:?}", connections);
-
     let addr = ([127, 0, 0, 1], args.port).into();
 
     let server = Server::bind(&addr)
-        .serve(|| {
+        .serve(move || {
             // This is the `Service` that will handle the connection.
             // `service_fn_ok` is a helper to convert a function that
             // returns a Response into a `Service`.
-            service_fn_ok(service::get_service(&connections))
+            service_fn_ok(service::get_service(args.directory.clone()))
         })
         .map_err(|e| eprintln!("server error: {}", e));
 
