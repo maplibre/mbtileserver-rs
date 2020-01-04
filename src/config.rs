@@ -4,6 +4,7 @@ use std::path::PathBuf;
 extern crate clap;
 use clap::{App, Arg};
 
+#[derive(Clone)]
 pub struct Args {
     pub directory: PathBuf,
     pub port: u16,
@@ -35,8 +36,5 @@ pub fn parse<'a>() -> Args {
     let directory = PathBuf::from(matches.value_of("directory").unwrap_or("tiles"));
     read_dir(directory.clone()).expect("Directory does not exists");
 
-    Args {
-        directory,
-        port,
-    }
+    Args { directory, port }
 }
