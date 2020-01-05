@@ -4,7 +4,6 @@ extern crate lazy_static;
 extern crate regex;
 extern crate serde;
 extern crate serde_json;
-extern crate tera;
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;

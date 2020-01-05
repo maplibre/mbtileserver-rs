@@ -3,7 +3,7 @@ use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::PathBuf;
 
-use rusqlite::{Connection, OpenFlags, NO_PARAMS};
+use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
 
 use serde;
 use serde::{Deserialize, Serialize};
@@ -23,12 +23,12 @@ pub struct TileMetaJSON {
     pub name: Option<String>,
     pub version: Option<String>,
     pub map: String,
-    pub tiles: String,
+    pub tiles: Vec<String>,
     pub tilejson: String,
     pub scheme: String,
     pub id: String,
     pub format: String,
-    pub grids: Option<String>,
+    pub grids: Option<Vec<String>>,
     pub bounds: Option<Vec<f64>>,
     pub minzoom: Option<u32>,
     pub maxzoom: Option<u32>,
@@ -64,6 +64,114 @@ pub fn get_tiles(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf>
         }
     }
     tiles
+}
+
+pub fn tiles_list(base_url: &str, tilesets: &HashMap<String, PathBuf>) -> Vec<TileSummaryJSON> {
+    let mut tile_summary_json: Vec<TileSummaryJSON> = Vec::new();
+    for (k, v) in tilesets.iter() {
+        match Connection::open_with_flags(v, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+            Ok(connection) => match get_data_format(&connection) {
+                Ok(image_type) => tile_summary_json.push(TileSummaryJSON {
+                    image_type,
+                    url: format!("{}/{}", base_url, k),
+                }),
+                _ => (),
+            },
+            _ => (),
+        }
+    }
+    tile_summary_json
+}
+
+pub fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Result<TileMetaJSON> {
+    let connection =
+        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+
+    let tile_format = match get_data_format(&connection) {
+        Ok(tile_format) => tile_format,
+        _ => return Err(Error),
+    };
+
+    let mut statement = connection
+        .prepare(r#"SELECT name, value FROM metadata"#)
+        .unwrap();
+    let mut metadata_rows = statement.query(NO_PARAMS).unwrap();
+
+    let mut metadata = TileMetaJSON {
+        name: None,
+        version: None,
+        map: format!("{}/{}/{}", base_url, tile_name, "map"),
+        tiles: vec![format!(
+            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}",
+            base_url, tile_name, tile_format
+        )],
+        tilejson: String::from("2.1.0"),
+        scheme: String::from("xyz"),
+        id: String::from(tile_name),
+        format: tile_format,
+        grids: None,
+        bounds: None,
+        minzoom: None,
+        maxzoom: None,
+        description: None,
+        attribution: None,
+        legend: None,
+        template: None,
+    };
+
+    while let Some(row) = metadata_rows.next().unwrap() {
+        let label: String = row.get(0).unwrap();
+        let value: String = row.get(1).unwrap();
+        match label.as_ref() {
+            "name" => metadata.name = Some(value),
+            "version" => metadata.version = Some(value),
+            "bounds" => {
+                metadata.bounds = Some(value.split(",").filter_map(|s| s.parse().ok()).collect())
+            }
+            "minzoom" => metadata.minzoom = Some(value.parse().unwrap()),
+            "maxzoom" => metadata.maxzoom = Some(value.parse().unwrap()),
+            "description" => metadata.description = Some(value),
+            "attribution" => metadata.attribution = Some(value),
+            "legend" => metadata.legend = Some(value),
+            "template" => metadata.template = Some(value),
+            _ => (),
+        }
+    }
+
+    Ok(metadata)
+}
+
+pub fn tile_data(tile_path: &PathBuf, query: &[&str]) -> (Vec<u8>, String) {
+    let connection =
+        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let z = query[0];
+    let x = query[1];
+    let rest = query[2];
+    let (y, format) = match rest.find(".") {
+        Some(index) => (&rest[..index], &rest[index + 1..]),
+        None => panic!(),
+    };
+    let y: u32 = (1 << z.parse::<u32>().unwrap()) - 1 - y.parse::<u32>().unwrap();
+
+    let mut statement = connection
+        .prepare(
+            r#"
+                SELECT tile_data
+                FROM map,
+                     images
+                WHERE zoom_level = ?1
+                  AND tile_column = ?2
+                  AND tile_row = ?3
+                  AND map.tile_id = images.tile_id
+                "#,
+        )
+        .unwrap(); // TODO handle error
+    (
+        statement
+            .query_row(params![z, x, y], |row| Ok(row.get(0).unwrap()))
+            .unwrap_or(get_blank_image()),
+        String::from(format),
+    )
 }
 
 pub fn get_data_format(connection: &Connection) -> Result<String> {

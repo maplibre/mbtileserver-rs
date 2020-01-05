@@ -1,0 +1,11 @@
+
+version: '3'
+
+services:
+  mbtileserver:
+    build: .
+    restart: always
+    ports:
+      - 8080:3000
+    volumes:
+      - ./tiles:/usr/src/mbtileserver/tiles
