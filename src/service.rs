@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 use hyper::{header, Body, Request, Response, StatusCode};
 
+use regex::Regex;
+
 use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
 
 use serde_json;
@@ -12,11 +14,15 @@ use tera::{Context, Tera};
 use crate::tiles;
 
 lazy_static! {
-    pub static ref TEMPLATES: Tera = {
+    static ref TILE_URL_RE: Regex = Regex::new(r"^/services/(.*)/tiles/(\d+/\d+/\d+.*)").unwrap();
+}
+
+lazy_static! {
+    static ref TEMPLATES: Tera = {
         let tera = match Tera::new("templates/**/*") {
             Ok(t) => t,
             Err(e) => {
-                println!("Parsing error(s): {}", e);
+                eprintln!("Parsing error(s): {}", e);
                 ::std::process::exit(1);
             }
         };
@@ -24,10 +30,20 @@ lazy_static! {
     };
 }
 
+static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
+static NOT_FOUND: &[u8] = b"Not Found";
+
 fn not_found() -> Response<Body> {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
-        .body(Body::from("404 page not found"))
+        .body(NOT_FOUND.into())
+        .unwrap()
+}
+
+fn server_error() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(INTERNAL_SERVER_ERROR.into())
         .unwrap()
 }
 
@@ -40,11 +56,17 @@ fn not_found() -> Response<Body> {
 
 fn tiles_list(base_url: &str, tilesets: &HashMap<String, PathBuf>) -> Response<Body> {
     let mut resp: Vec<tiles::TileSummaryJSON> = Vec::new();
-    for k in tilesets.keys() {
-        resp.push(tiles::TileSummaryJSON {
-            image_type: String::from("jpg"),
-            url: format!("{}/{}", base_url, k),
-        });
+    for (k, v) in tilesets.iter() {
+        match Connection::open_with_flags(v, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+            Ok(connection) => match tiles::get_data_format(&connection) {
+                Ok(image_type) => resp.push(tiles::TileSummaryJSON {
+                    image_type,
+                    url: format!("{}/{}", base_url, k),
+                }),
+                _ => (),
+            },
+            _ => (),
+        }
     }
     let resp_json = serde_json::to_string(&resp).unwrap(); // TODO handle error
     Response::builder()
@@ -57,7 +79,10 @@ fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Respons
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
-    let tile_format = tiles::get_data_format(&connection);
+    let tile_format = match tiles::get_data_format(&connection) {
+        Ok(tile_format) => tile_format,
+        _ => return server_error(),
+    };
 
     let mut statement = connection
         .prepare(r#"SELECT name, value FROM metadata"#)
@@ -166,7 +191,7 @@ pub async fn get_service(
     request: Request<Body>,
     directory: PathBuf,
 ) -> Result<Response<Body>, hyper::Error> {
-    let tilesets = tiles::get_tiles(&directory);
+    let tilesets = tiles::get_tiles(String::from(""), &directory);
 
     let path = request.uri().path();
     let scheme = match request.uri().scheme_str() {
@@ -179,28 +204,36 @@ pub async fn get_service(
         request.headers()["host"].to_str().unwrap()
     );
 
-    if path.starts_with("/services") {
-        let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
-        if segments.len() == 1 {
-            // Root url: show all services
-            return Ok(tiles_list(&base_url, &tilesets));
+    match TILE_URL_RE.captures(path) {
+        Some(matches) => {
+            let tile_path = tilesets.get(&matches[1]).unwrap();
+            let query: Vec<&str> = matches[2].split('/').collect();
+            return Ok(tile_data(tile_path, &query));
         }
+        None => {
+            if path.starts_with("/services") {
+                let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
+                if segments.len() == 1 {
+                    // Root url (/services): show all services
+                    return Ok(tiles_list(&base_url, &tilesets));
+                }
 
-        let tile_name = segments[1];
-        let tile_path = tilesets.get(tile_name).unwrap(); // TODO handle error
+                if segments[segments.len() - 1] == "map" {
+                    // Tileset map preview (/services/<tileset-path>/map)
+                    let tile_name = segments[1..segments.len() - 1].join("/");
+                    return Ok(tile_map(&base_url, &tile_name));
+                }
 
-        if segments[segments.len() - 1] == "map" {
-            return Ok(tile_map(&base_url, tile_name));
+                // Tileset details (/services/<tileset-path>)
+                let tile_name = segments[1..].join("/");
+                let tile_path = tilesets.get(&tile_name).unwrap(); // TODO handle error
+                return Ok(tile_details(&base_url, &tile_name, tile_path));
+            }
+            if path.starts_with("/static") {
+                // Serve static files for map preview
+                return Ok(assets(&path[1..]));
+            }
         }
-
-        if segments.len() == 2 {
-            return Ok(tile_details(&base_url, tile_name, tile_path));
-        }
-
-        return Ok(tile_data(tile_path, &segments[3..]));
-    }
-    if path.starts_with("/static") {
-        return Ok(assets(&path[1..]));
-    }
+    };
     Ok(not_found())
 }

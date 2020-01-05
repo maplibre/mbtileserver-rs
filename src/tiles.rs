@@ -3,10 +3,12 @@ use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::PathBuf;
 
-use rusqlite::{Connection, NO_PARAMS};
+use rusqlite::{Connection, OpenFlags, NO_PARAMS};
 
 use serde;
 use serde::{Deserialize, Serialize};
+
+use crate::errors::{Error, Result};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -36,22 +38,39 @@ pub struct TileMetaJSON {
     pub template: Option<String>,
 }
 
-pub fn get_tiles(path: &PathBuf) -> HashMap<String, PathBuf> {
+pub fn get_tiles(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf> {
     let mut tiles = HashMap::new();
-    for file in read_dir(path).unwrap() {
-        let file = file.unwrap().path();
-        if file.extension().and_then(OsStr::to_str) == Some("mbtiles") {
-            let file_name = file.file_stem().unwrap().to_str().unwrap();
-            tiles.insert(file_name.to_string(), file);
+    for p in read_dir(path).unwrap() {
+        let p = p.unwrap().path();
+        if p.is_dir() {
+            let dir_name = p.file_stem().unwrap().to_str().unwrap();
+            let mut parent_dir_cloned = parent_dir.clone();
+            parent_dir_cloned.push_str(dir_name);
+            parent_dir_cloned.push_str("/");
+            tiles.extend(get_tiles(parent_dir_cloned, &p));
+        } else if p.extension().and_then(OsStr::to_str) == Some("mbtiles") {
+            let file_name = p.file_stem().unwrap().to_str().unwrap();
+            match Connection::open_with_flags(&p, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+                Ok(connection) => match get_data_format(&connection) {
+                    Ok(_) => {
+                        let mut parent_dir_cloned = parent_dir.clone();
+                        parent_dir_cloned.push_str(file_name);
+                        tiles.insert(parent_dir_cloned, p)
+                    }
+                    _ => None,
+                },
+                _ => None,
+            };
         }
     }
     tiles
 }
 
-pub fn get_data_format(connection: &Connection) -> String {
-    let mut statement = connection
-        .prepare(r#"SELECT tile_data FROM tiles LIMIT 1"#)
-        .unwrap();
+pub fn get_data_format(connection: &Connection) -> Result<String> {
+    let mut statement = match connection.prepare(r#"SELECT tile_data FROM tiles LIMIT 1"#) {
+        Ok(s) => s,
+        Err(_) => return Err(Error),
+    };
     let tile_format: &str = statement
         .query_row(NO_PARAMS, |row| {
             let value: Vec<u8> = row.get(0).unwrap();
@@ -67,7 +86,10 @@ pub fn get_data_format(connection: &Connection) -> String {
             }
         })
         .unwrap();
-    String::from(tile_format).to_lowercase()
+    match tile_format {
+        f if f == "Unknown" => Err(Error),
+        f => Ok(String::from(f).to_lowercase()),
+    }
 }
 
 pub fn get_content_type(tile_format: &str) -> String {
