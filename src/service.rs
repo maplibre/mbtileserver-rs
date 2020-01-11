@@ -12,7 +12,8 @@ use serde_json;
 use crate::tiles;
 
 lazy_static! {
-    static ref TILE_URL_RE: Regex = Regex::new(r"^/services/(.*)/tiles/(\d+/\d+/\d+.*)").unwrap();
+    static ref TILE_URL_RE: Regex =
+        Regex::new(r"^/services/(?P<tile_path>.*)/tiles/(?P<z>\d+)/(?P<x>\d+)/(?P<y>\d+)\.(?P<format>[a-zA-Z]+)/?(\?(?P<query>.*))?").unwrap();
 }
 
 static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
@@ -64,7 +65,7 @@ pub async fn get_service(
     request: Request<Body>,
     directory: PathBuf,
 ) -> Result<Response<Body>, hyper::Error> {
-    let tilesets = tiles::get_tiles(String::from(""), &directory);
+    let tilesets = tiles::discover_tilesets(String::from(""), &directory);
 
     let path = request.uri().path();
     let scheme = match request.uri().scheme_str() {
@@ -79,12 +80,25 @@ pub async fn get_service(
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
-            let tile_path = tilesets.get(&matches[1]).unwrap();
-            let query: Vec<&str> = matches[2].split('/').collect();
-            let (tile_data, format) = tiles::tile_data(tile_path, &query);
+            let tile_path = tilesets
+                .get(matches.name("tile_path").unwrap().as_str())
+                .unwrap();
+            let z = matches.name("z").unwrap().as_str();
+            let x = matches.name("x").unwrap().as_str();
+            let y = matches.name("y").unwrap().as_str();
+            let data_format = matches.name("format").unwrap().as_str();
+            let query_string = match matches.name("query") {
+                Some(q) => q.as_str(),
+                None => "",
+            };
+            tiles::grid_data(tile_path, z, x, y, query_string);
+            let response = match data_format {
+                "json" => vec![],
+                _ => tiles::tile_data(tile_path, z, x, y, query_string),
+            };
             return Ok(Response::builder()
-                .header(header::CONTENT_TYPE, tiles::get_content_type(&format))
-                .body(Body::from(tile_data))
+                .header(header::CONTENT_TYPE, tiles::get_content_type(&data_format))
+                .body(Body::from(response))
                 .unwrap());
         }
         None => {

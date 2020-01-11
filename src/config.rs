@@ -10,7 +10,7 @@ pub struct Args {
     pub port: u16,
 }
 
-pub fn parse<'a>() -> Args {
+pub fn parse() -> Args {
     let matches = App::new("MBTiles Server")
         .arg(
             Arg::with_name("directory")

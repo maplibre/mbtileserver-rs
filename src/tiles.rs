@@ -38,7 +38,15 @@ pub struct TileMetaJSON {
     pub template: Option<String>,
 }
 
-pub fn get_tiles(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf> {
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UTFGrid {
+    key_name: String,
+    key_json: String,
+}
+
+pub fn discover_tilesets(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf> {
+    // Walk through the given path and its subfolders, find all valid mbtiles and create and return a map of mbtiles file names to their absolute path
     let mut tiles = HashMap::new();
     for p in read_dir(path).unwrap() {
         let p = p.unwrap().path();
@@ -47,11 +55,11 @@ pub fn get_tiles(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf>
             let mut parent_dir_cloned = parent_dir.clone();
             parent_dir_cloned.push_str(dir_name);
             parent_dir_cloned.push_str("/");
-            tiles.extend(get_tiles(parent_dir_cloned, &p));
+            tiles.extend(discover_tilesets(parent_dir_cloned, &p));
         } else if p.extension().and_then(OsStr::to_str) == Some("mbtiles") {
             let file_name = p.file_stem().unwrap().to_str().unwrap();
             match Connection::open_with_flags(&p, OpenFlags::SQLITE_OPEN_READ_ONLY) {
-                Ok(connection) => match get_data_format(&connection) {
+                Ok(connection) => match get_data_format(&connection, "tile") {
                     Ok(_) => {
                         let mut parent_dir_cloned = parent_dir.clone();
                         parent_dir_cloned.push_str(file_name);
@@ -70,7 +78,7 @@ pub fn tiles_list(base_url: &str, tilesets: &HashMap<String, PathBuf>) -> Vec<Ti
     let mut tile_summary_json: Vec<TileSummaryJSON> = Vec::new();
     for (k, v) in tilesets.iter() {
         match Connection::open_with_flags(v, OpenFlags::SQLITE_OPEN_READ_ONLY) {
-            Ok(connection) => match get_data_format(&connection) {
+            Ok(connection) => match get_data_format(&connection, "tile") {
                 Ok(image_type) => tile_summary_json.push(TileSummaryJSON {
                     image_type,
                     url: format!("{}/{}", base_url, k),
@@ -87,7 +95,7 @@ pub fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Res
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
-    let tile_format = match get_data_format(&connection) {
+    let tile_format = match get_data_format(&connection, "tile") {
         Ok(tile_format) => tile_format,
         _ => return Err(Error),
     };
@@ -96,6 +104,14 @@ pub fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Res
         .prepare(r#"SELECT name, value FROM metadata"#)
         .unwrap();
     let mut metadata_rows = statement.query(NO_PARAMS).unwrap();
+
+    let grids = match get_grid_info(&connection) {
+        Some(_) => Some(vec![format!(
+            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json",
+            base_url, tile_name
+        )]),
+        None => None,
+    };
 
     let mut metadata = TileMetaJSON {
         name: None,
@@ -109,7 +125,7 @@ pub fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Res
         scheme: String::from("xyz"),
         id: String::from(tile_name),
         format: tile_format,
-        grids: None,
+        grids,
         bounds: None,
         minzoom: None,
         maxzoom: None,
@@ -141,45 +157,83 @@ pub fn tile_details(base_url: &str, tile_name: &str, tile_path: &PathBuf) -> Res
     Ok(metadata)
 }
 
-pub fn tile_data(tile_path: &PathBuf, query: &[&str]) -> (Vec<u8>, String) {
+fn get_grid_info(connection: &Connection) -> Option<String> {
+    let mut statement = connection.prepare(r#"SELECT count(*) FROM sqlite_master WHERE name IN ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')"#).unwrap();
+    let count: u8 = statement
+        .query_row(NO_PARAMS, |row| {
+            let value: u8 = row.get(0).unwrap();
+            Ok(value)
+        })
+        .unwrap();
+    if count == 5 {
+        match get_data_format(connection, "grid") {
+            Ok(grid_format) => return Some(grid_format),
+            Err(_) => return None,
+        };
+    }
+    None
+}
+
+pub fn grid_data(tile_path: &PathBuf, z: &str, x: &str, y: &str, query: &str) {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
-    let z = query[0];
-    let x = query[1];
-    let rest = query[2];
-    let (y, format) = match rest.find(".") {
-        Some(index) => (&rest[..index], &rest[index + 1..]),
-        None => panic!(),
-    };
     let y: u32 = (1 << z.parse::<u32>().unwrap()) - 1 - y.parse::<u32>().unwrap();
 
     let mut statement = connection
         .prepare(
-            r#"
-                SELECT tile_data
-                FROM map,
-                     images
+            r#"SELECT key_name, key_json
+                FROM grid_data
+                WHERE zoom_level = ?1
+                  AND tile_column = ?2
+                  AND tile_row = ?3
+            "#,
+        )
+        .unwrap(); // TODO handle error
+    let grid_data_iter = statement
+        .query_map(params![z, x, y], |row| {
+            Ok(UTFGrid {
+                key_name: row.get(0).unwrap(),
+                key_json: row.get(1).unwrap(),
+            })
+        })
+        .unwrap();
+    for gd in grid_data_iter {
+        println!("Got data {:?}", gd.unwrap());
+    }
+}
+
+pub fn tile_data(tile_path: &PathBuf, z: &str, x: &str, y: &str, query: &str) -> Vec<u8> {
+    let connection =
+        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let y: u32 = (1 << z.parse::<u32>().unwrap()) - 1 - y.parse::<u32>().unwrap();
+
+    let mut statement = connection
+        .prepare(
+            r#"SELECT tile_data
+                FROM map, images
                 WHERE zoom_level = ?1
                   AND tile_column = ?2
                   AND tile_row = ?3
                   AND map.tile_id = images.tile_id
-                "#,
+            "#,
         )
         .unwrap(); // TODO handle error
-    (
-        statement
-            .query_row(params![z, x, y], |row| Ok(row.get(0).unwrap()))
-            .unwrap_or(get_blank_image()),
-        String::from(format),
-    )
+    statement
+        .query_row(params![z, x, y], |row| Ok(row.get(0).unwrap()))
+        .unwrap_or(get_blank_image())
 }
 
-pub fn get_data_format(connection: &Connection) -> Result<String> {
-    let mut statement = match connection.prepare(r#"SELECT tile_data FROM tiles LIMIT 1"#) {
+pub fn get_data_format(connection: &Connection, category: &str) -> Result<String> {
+    let query = match category {
+        "tile" => r#"SELECT tile_data FROM tiles LIMIT 1"#,
+        "grid" => r#"SELECT grid_utfgrid FROM grid_utfgrid LIMIT 1"#,
+        _ => return Err(Error),
+    };
+    let mut statement = match connection.prepare(query) {
         Ok(s) => s,
         Err(_) => return Err(Error),
     };
-    let tile_format: &str = statement
+    let data_format: &str = statement
         .query_row(NO_PARAMS, |row| {
             let value: Vec<u8> = row.get(0).unwrap();
             match value.as_slice() {
@@ -194,7 +248,7 @@ pub fn get_data_format(connection: &Connection) -> Result<String> {
             }
         })
         .unwrap();
-    match tile_format {
+    match data_format {
         f if f == "Unknown" => Err(Error),
         f => Ok(String::from(f).to_lowercase()),
     }
