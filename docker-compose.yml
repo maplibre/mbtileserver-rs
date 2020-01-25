@@ -6,6 +6,7 @@ services:
     build: .
     restart: always
     ports:
-      - 8080:3000
+      - 3000:3000
+    entrypoint: mbtileserver -d /tiles
     volumes:
-      - ./tiles:/usr/src/mbtileserver/tiles
+      - ./tiles:/tiles

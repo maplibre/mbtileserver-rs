@@ -23,7 +23,7 @@ async fn main() {
 
     println!("Serving tiles from {}", args.directory.display());
 
-    let addr = ([127, 0, 0, 1], args.port).into();
+    let addr = ([0, 0, 0, 0], args.port).into();
 
     let make_service = make_service_fn(move |_conn| {
         let direcoty = args.directory.clone();
