@@ -83,23 +83,41 @@ pub async fn get_service(
             let tile_path = tilesets
                 .get(matches.name("tile_path").unwrap().as_str())
                 .unwrap();
-            let z = matches.name("z").unwrap().as_str();
-            let x = matches.name("x").unwrap().as_str();
-            let y = matches.name("y").unwrap().as_str();
+            let z = matches.name("z").unwrap().as_str().parse::<u32>().unwrap();
+            let x = matches.name("x").unwrap().as_str().parse::<u32>().unwrap();
+            let y = matches.name("y").unwrap().as_str().parse::<u32>().unwrap();
+            let y: u32 = (1 << z) - 1 - y;
             let data_format = matches.name("format").unwrap().as_str();
             let query_string = match matches.name("query") {
                 Some(q) => q.as_str(),
                 None => "",
             };
-            tiles::grid_data(tile_path, z, x, y, query_string);
-            let response = match data_format {
-                "json" => vec![],
-                _ => tiles::tile_data(tile_path, z, x, y, query_string),
+
+            return match data_format {
+                "json" => Ok(Response::builder()
+                    .header(header::CONTENT_TYPE, tiles::get_content_type("json"))
+                    .body(Body::from(
+                        serde_json::to_string(&tiles::get_grid_data(
+                            tile_path,
+                            z,
+                            x,
+                            y,
+                            query_string,
+                        ))
+                        .unwrap(),
+                    ))
+                    .unwrap()),
+                _ => Ok(Response::builder()
+                    .header(header::CONTENT_TYPE, tiles::get_content_type(&data_format))
+                    .body(Body::from(tiles::get_tile_data(
+                        tile_path,
+                        z,
+                        x,
+                        y,
+                        query_string,
+                    )))
+                    .unwrap()),
             };
-            return Ok(Response::builder()
-                .header(header::CONTENT_TYPE, tiles::get_content_type(&data_format))
-                .body(Body::from(response))
-                .unwrap());
         }
         None => {
             if path.starts_with("/services") {
@@ -107,7 +125,8 @@ pub async fn get_service(
                 if segments.len() == 1 {
                     // Root url (/services): show all services
                     let resp_json =
-                        serde_json::to_string(&tiles::tiles_list(&base_url, &tilesets)).unwrap(); // TODO handle error
+                        serde_json::to_string(&tiles::get_tiles_list(&base_url, &tilesets))
+                            .unwrap(); // TODO handle error
                     return Ok(Response::builder()
                         .header(header::CONTENT_TYPE, "application/json")
                         .body(Body::from(resp_json))
@@ -130,7 +149,7 @@ pub async fn get_service(
                         )))
                     }
                 };
-                match tiles::tile_details(&base_url, &tile_name, tile_path) {
+                match tiles::get_tile_details(&base_url, &tile_name, tile_path) {
                     Ok(metadata) => {
                         let resp_json = serde_json::to_string(&metadata).unwrap(); // TODO handle error
                         return Ok(Response::builder()

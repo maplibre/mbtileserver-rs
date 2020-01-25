@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 clap = "2.33"
+flate2 = "1.0"
 hyper = "0.13"
 lazy_static = "1.4"
 libsqlite3-sys = "0.17"

@@ -1,3 +1,4 @@
+extern crate flate2;
 extern crate hyper;
 #[macro_use]
 extern crate lazy_static;
