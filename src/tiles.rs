@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
+use std::fmt;
 use std::fs::read_dir;
-use std::io;
 use std::io::prelude::*;
 use std::path::PathBuf;
 
@@ -15,15 +15,38 @@ use serde_json::Value as JSONValue;
 
 use crate::errors::{Error, Result};
 
-enum Decoder {
-    GzDecoder,
-    ZlibDecoder,
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DataFormat {
+    JSON,
+    JPG,
+    PNG,
+    WEBP,
+    PBF,
+    GZIP,
+    ZLIB,
+    UNKNOWN,
+}
+
+impl fmt::Display for DataFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            DataFormat::JSON => write!(f, "json"),
+            DataFormat::JPG => write!(f, "jpg"),
+            DataFormat::PNG => write!(f, "png"),
+            DataFormat::WEBP => write!(f, "webp"),
+            DataFormat::PBF => write!(f, "pbf"),
+            DataFormat::GZIP => write!(f, "pbf"), // GZIP masks PBF, which is only expected type for tiles in GZIP format
+            DataFormat::ZLIB => write!(f, "zlib"),
+            DataFormat::UNKNOWN => write!(f, "unknown"),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TileSummaryJSON {
-    pub image_type: String,
+    pub image_type: DataFormat,
     pub url: String,
 }
 
@@ -37,7 +60,7 @@ pub struct TileMetaJSON {
     pub tilejson: String,
     pub scheme: String,
     pub id: String,
-    pub format: String,
+    pub format: DataFormat,
     pub grids: Option<Vec<String>>,
     pub bounds: Option<Vec<f64>>,
     pub minzoom: Option<u32>,
@@ -62,6 +85,32 @@ pub struct UTFGrid {
     pub keys: Vec<String>,
 }
 
+pub fn is_valid_tileset(connection: &Connection) -> bool {
+    // 'tiles', 'metadata' tables or views must be present
+    let query = r#"SELECT count(*) FROM sqlite_master WHERE name IN ('tiles', 'metadata')"#;
+    let mut statement = match connection.prepare(query) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    match statement.query_row(NO_PARAMS, |row| Ok(row.get::<_, i8>(0).unwrap())) {
+        Ok(count) => {
+            if count < 2 {
+                return false;
+            }
+        }
+        Err(_) => return false,
+    };
+
+    // validate format
+    match get_data_format_via_query(&connection, "tile") {
+        Ok(data_format) => match data_format {
+            DataFormat::UNKNOWN => false,
+            _ => true,
+        },
+        _ => false,
+    }
+}
+
 pub fn discover_tilesets(parent_dir: String, path: &PathBuf) -> HashMap<String, PathBuf> {
     // Walk through the given path and its subfolders, find all valid mbtiles and create and return a map of mbtiles file names to their absolute path
     let mut tiles = HashMap::new();
@@ -76,14 +125,15 @@ pub fn discover_tilesets(parent_dir: String, path: &PathBuf) -> HashMap<String, 
         } else if p.extension().and_then(OsStr::to_str) == Some("mbtiles") {
             let file_name = p.file_stem().unwrap().to_str().unwrap();
             match Connection::open_with_flags(&p, OpenFlags::SQLITE_OPEN_READ_ONLY) {
-                Ok(connection) => match get_data_format_via_query(&connection, "tile") {
-                    Ok(_) => {
+                Ok(connection) => {
+                    if is_valid_tileset(&connection) {
                         let mut parent_dir_cloned = parent_dir.clone();
                         parent_dir_cloned.push_str(file_name);
                         tiles.insert(parent_dir_cloned, p)
+                    } else {
+                        None
                     }
-                    _ => None,
-                },
+                }
                 _ => None,
             };
         }
@@ -112,6 +162,7 @@ pub fn get_tile_details(
     base_url: &str,
     tile_name: &str,
     tile_path: &PathBuf,
+    query_string: String,
 ) -> Result<TileMetaJSON> {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
@@ -122,14 +173,14 @@ pub fn get_tile_details(
     };
 
     let mut statement = connection
-        .prepare(r#"SELECT name, value FROM metadata"#)
+        .prepare(r#"SELECT name, value FROM metadata WHERE value IS NOT ''"#)
         .unwrap();
     let mut metadata_rows = statement.query(NO_PARAMS).unwrap();
 
     let grids = match get_grid_info(&connection) {
         Some(_) => Some(vec![format!(
-            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json",
-            base_url, tile_name
+            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
+            base_url, tile_name, query_string
         )]),
         None => None,
     };
@@ -139,8 +190,8 @@ pub fn get_tile_details(
         version: None,
         map: format!("{}/{}/{}", base_url, tile_name, "map"),
         tiles: vec![format!(
-            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}",
-            base_url, tile_name, tile_format
+            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
+            base_url, tile_name, tile_format, query_string
         )],
         tilejson: String::from("2.1.0"),
         scheme: String::from("xyz"),
@@ -178,7 +229,7 @@ pub fn get_tile_details(
     Ok(metadata)
 }
 
-fn get_grid_info(connection: &Connection) -> Option<String> {
+fn get_grid_info(connection: &Connection) -> Option<DataFormat> {
     let mut statement = connection.prepare(r#"SELECT count(*) FROM sqlite_master WHERE name IN ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')"#).unwrap();
     let count: u8 = statement
         .query_row(NO_PARAMS, |row| {
@@ -195,15 +246,15 @@ fn get_grid_info(connection: &Connection) -> Option<String> {
     None
 }
 
-fn decode_reader(bytes: Vec<u8>, data_type: &str) -> Result<String> {
+fn decode_reader(bytes: Vec<u8>, data_type: DataFormat) -> Result<String> {
     match data_type {
-        "gzip" => {
+        DataFormat::GZIP => {
             let mut z = GzDecoder::new(&bytes[..]);
             let mut s = String::new();
             z.read_to_string(&mut s).unwrap();
             Ok(s)
         }
-        "zlib" => {
+        DataFormat::ZLIB => {
             let mut z = ZlibDecoder::new(&bytes[..]);
             let mut s = String::new();
             z.read_to_string(&mut s).unwrap();
@@ -213,7 +264,7 @@ fn decode_reader(bytes: Vec<u8>, data_type: &str) -> Result<String> {
     }
 }
 
-pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32, query: &str) -> UTFGrid {
+pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<(UTFGrid, String)> {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
     let mut statement = connection
@@ -225,15 +276,16 @@ pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32, query: &str) -
                   AND tile_row = ?3
             "#,
         )
-        .unwrap(); // TODO handle error
-    let grid_data = statement
-        .query_row(params![z, x, y], |row| {
-            Ok(row.get::<_, Vec<u8>>(0).unwrap())
-        })
         .unwrap();
+    let grid_data = match statement.query_row(params![z, x, y], |row| {
+        Ok(row.get::<_, Vec<u8>>(0).unwrap())
+    }) {
+        Ok(d) => d,
+        Err(_) => return Err(Error),
+    };
     let data_format = get_data_format(&grid_data);
     let grid_key_json: UTFGridKeys =
-        serde_json::from_str(&decode_reader(grid_data, &data_format).unwrap()).unwrap();
+        serde_json::from_str(&decode_reader(grid_data, data_format).unwrap()).unwrap();
     let mut grid_data = UTFGrid {
         data: HashMap::new(),
         grid: grid_key_json.grid,
@@ -263,21 +315,21 @@ pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32, query: &str) -
         let v: JSONValue = serde_json::from_str(&v).unwrap();
         grid_data.data.insert(k, v);
     }
-    grid_data
+    let content_type = format!("{}", data_format);
+    Ok((grid_data, content_type))
 }
 
-pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32, query: &str) -> Vec<u8> {
+pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Vec<u8> {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
     let mut statement = connection
         .prepare(
             r#"SELECT tile_data
-                FROM map, images
+                FROM tiles
                 WHERE zoom_level = ?1
                   AND tile_column = ?2
                   AND tile_row = ?3
-                  AND map.tile_id = images.tile_id
             "#,
         )
         .unwrap(); // TODO handle error
@@ -286,20 +338,20 @@ pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32, query: &str) -
         .unwrap_or(get_blank_image())
 }
 
-pub fn get_data_format(data: &Vec<u8>) -> String {
+pub fn get_data_format(data: &Vec<u8>) -> DataFormat {
     match data {
-        v if &v[0..2] == b"\x1f\x8b" => String::from("gzip"), // this masks PBF format too
-        v if &v[0..2] == b"\x78\x9c" => String::from("zlib"),
-        v if &v[0..8] == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" => String::from("png"),
-        v if &v[0..3] == b"\xFF\xD8\xFF" => String::from("jpg"),
+        v if &v[0..2] == b"\x1f\x8b" => DataFormat::GZIP, // this masks PBF format too
+        v if &v[0..2] == b"\x78\x9c" => DataFormat::ZLIB,
+        v if &v[0..8] == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" => DataFormat::PNG,
+        v if &v[0..3] == b"\xFF\xD8\xFF" => DataFormat::JPG,
         v if &v[0..14] == b"\x52\x49\x46\x46\xc0\x00\x00\x00\x57\x45\x42\x50\x56\x50" => {
-            String::from("webp")
+            DataFormat::WEBP
         }
-        _ => String::from("unknown"),
+        _ => DataFormat::UNKNOWN,
     }
 }
 
-pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Result<String> {
+pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Result<DataFormat> {
     let query = match category {
         "tile" => r#"SELECT tile_data FROM tiles LIMIT 1"#,
         "grid" => r#"SELECT grid_utfgrid FROM grid_utfgrid LIMIT 1"#,
@@ -309,15 +361,12 @@ pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Res
         Ok(s) => s,
         Err(_) => return Err(Error),
     };
-    let data_format: String = statement
+    let data_format: DataFormat = statement
         .query_row(NO_PARAMS, |row| {
             Ok(get_data_format(&row.get::<_, Vec<u8>>(0).unwrap()))
         })
-        .unwrap();
-    match data_format {
-        f if f == "unknown" => Err(Error),
-        f => Ok(f),
-    }
+        .unwrap_or(DataFormat::UNKNOWN);
+    Ok(data_format)
 }
 
 pub fn get_content_type(tile_format: &str) -> String {

@@ -7,6 +7,8 @@ use hyper::{header, Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
+use rusqlite::{Connection, OpenFlags};
+
 use serde_json;
 
 use crate::tiles;
@@ -40,8 +42,17 @@ fn bad_request(msg: String) -> Response<Body> {
         .unwrap()
 }
 
-pub fn tile_map() -> Response<Body> {
-    let file = File::open("templates/map.html").unwrap();
+pub fn tile_map(tile_path: &PathBuf) -> Response<Body> {
+    let connection =
+        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let template = match tiles::get_data_format_via_query(&connection, "tile") {
+        Ok(tile_format) => match tile_format {
+            tiles::DataFormat::PBF => "templates/map_vector.html",
+            _ => "templates/map.html",
+        },
+        _ => return server_error(),
+    };
+    let file = File::open(template).unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -88,34 +99,25 @@ pub async fn get_service(
             let y = matches.name("y").unwrap().as_str().parse::<u32>().unwrap();
             let y: u32 = (1 << z) - 1 - y;
             let data_format = matches.name("format").unwrap().as_str();
-            let query_string = match matches.name("query") {
+            // For future use
+            let _query_string = match matches.name("query") {
                 Some(q) => q.as_str(),
                 None => "",
             };
 
             return match data_format {
-                "json" => Ok(Response::builder()
-                    .header(header::CONTENT_TYPE, tiles::get_content_type("json"))
-                    .body(Body::from(
-                        serde_json::to_string(&tiles::get_grid_data(
-                            tile_path,
-                            z,
-                            x,
-                            y,
-                            query_string,
-                        ))
-                        .unwrap(),
-                    ))
-                    .unwrap()),
+                "json" => match tiles::get_grid_data(tile_path, z, x, y) {
+                    Ok((data, content_type)) => Ok(Response::builder()
+                        .header(header::CONTENT_TYPE, tiles::get_content_type("json"))
+                        .header(header::CONTENT_ENCODING, content_type)
+                        .body(Body::from(serde_json::to_string(&data).unwrap()))
+                        .unwrap()),
+                    Err(_) => Ok(not_found()),
+                },
                 _ => Ok(Response::builder()
                     .header(header::CONTENT_TYPE, tiles::get_content_type(&data_format))
-                    .body(Body::from(tiles::get_tile_data(
-                        tile_path,
-                        z,
-                        x,
-                        y,
-                        query_string,
-                    )))
+                    // .header(header::CONTENT_ENCODING, "gzip")
+                    .body(Body::from(tiles::get_tile_data(tile_path, z, x, y)))
                     .unwrap()),
             };
         }
@@ -135,7 +137,17 @@ pub async fn get_service(
 
                 if segments[segments.len() - 1] == "map" {
                     // Tileset map preview (/services/<tileset-path>/map)
-                    return Ok(tile_map());
+                    let tile_name = segments[1..(segments.len() - 1)].join("/");
+                    let tile_path = match tilesets.get(&tile_name) {
+                        Some(tile_path) => tile_path,
+                        None => {
+                            return Ok(bad_request(format!(
+                                "Tileset does not exist: {}",
+                                tile_name
+                            )))
+                        }
+                    };
+                    return Ok(tile_map(tile_path));
                 }
 
                 // Tileset details (/services/<tileset-path>)
@@ -149,7 +161,12 @@ pub async fn get_service(
                         )))
                     }
                 };
-                match tiles::get_tile_details(&base_url, &tile_name, tile_path) {
+                let query_string = match request.uri().query() {
+                    Some(q) => format!("?{}", q),
+                    None => String::new(),
+                };
+
+                match tiles::get_tile_details(&base_url, &tile_name, tile_path, query_string) {
                     Ok(metadata) => {
                         let resp_json = serde_json::to_string(&metadata).unwrap(); // TODO handle error
                         return Ok(Response::builder()
