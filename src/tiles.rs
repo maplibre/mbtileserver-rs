@@ -1,11 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
-use std::fmt;
 use std::fs::read_dir;
-use std::io::prelude::*;
 use std::path::PathBuf;
-
-use flate2::read::{GzDecoder, ZlibDecoder};
 
 use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
 
@@ -15,38 +11,12 @@ use serde_json::Value as JSONValue;
 
 use crate::errors::{Error, Result};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum DataFormat {
-    JSON,
-    JPG,
-    PNG,
-    WEBP,
-    PBF,
-    GZIP,
-    ZLIB,
-    UNKNOWN,
-}
-
-impl fmt::Display for DataFormat {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            DataFormat::JSON => write!(f, "json"),
-            DataFormat::JPG => write!(f, "jpg"),
-            DataFormat::PNG => write!(f, "png"),
-            DataFormat::WEBP => write!(f, "webp"),
-            DataFormat::PBF => write!(f, "pbf"),
-            DataFormat::GZIP => write!(f, "pbf"), // GZIP masks PBF, which is only expected type for tiles in GZIP format
-            DataFormat::ZLIB => write!(f, "zlib"),
-            DataFormat::UNKNOWN => write!(f, "unknown"),
-        }
-    }
-}
+use crate::utils;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TileSummaryJSON {
-    pub image_type: DataFormat,
+    pub image_type: utils::DataFormat,
     pub url: String,
 }
 
@@ -60,7 +30,7 @@ pub struct TileMetaJSON {
     pub tilejson: String,
     pub scheme: String,
     pub id: String,
-    pub format: DataFormat,
+    pub format: utils::DataFormat,
     pub grids: Option<Vec<String>>,
     pub bounds: Option<Vec<f64>>,
     pub minzoom: Option<u32>,
@@ -104,7 +74,7 @@ pub fn is_valid_tileset(connection: &Connection) -> bool {
     // validate format
     match get_data_format_via_query(&connection, "tile") {
         Ok(data_format) => match data_format {
-            DataFormat::UNKNOWN => false,
+            utils::DataFormat::UNKNOWN => false,
             _ => true,
         },
         _ => false,
@@ -191,7 +161,10 @@ pub fn get_tile_details(
         map: format!("{}/{}/{}", base_url, tile_name, "map"),
         tiles: vec![format!(
             "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
-            base_url, tile_name, tile_format, query_string
+            base_url,
+            tile_name,
+            tile_format.format(),
+            query_string
         )],
         tilejson: String::from("2.1.0"),
         scheme: String::from("xyz"),
@@ -229,7 +202,7 @@ pub fn get_tile_details(
     Ok(metadata)
 }
 
-fn get_grid_info(connection: &Connection) -> Option<DataFormat> {
+fn get_grid_info(connection: &Connection) -> Option<utils::DataFormat> {
     let mut statement = connection.prepare(r#"SELECT count(*) FROM sqlite_master WHERE name IN ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')"#).unwrap();
     let count: u8 = statement
         .query_row(NO_PARAMS, |row| {
@@ -246,25 +219,7 @@ fn get_grid_info(connection: &Connection) -> Option<DataFormat> {
     None
 }
 
-fn decode_reader(bytes: Vec<u8>, data_type: DataFormat) -> Result<String> {
-    match data_type {
-        DataFormat::GZIP => {
-            let mut z = GzDecoder::new(&bytes[..]);
-            let mut s = String::new();
-            z.read_to_string(&mut s).unwrap();
-            Ok(s)
-        }
-        DataFormat::ZLIB => {
-            let mut z = ZlibDecoder::new(&bytes[..]);
-            let mut s = String::new();
-            z.read_to_string(&mut s).unwrap();
-            Ok(s)
-        }
-        _ => Err(Error),
-    }
-}
-
-pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<(UTFGrid, String)> {
+pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<UTFGrid> {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
     let mut statement = connection
@@ -285,7 +240,7 @@ pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<(UTF
     };
     let data_format = get_data_format(&grid_data);
     let grid_key_json: UTFGridKeys =
-        serde_json::from_str(&decode_reader(grid_data, data_format).unwrap()).unwrap();
+        serde_json::from_str(&utils::decode(grid_data, data_format).unwrap()).unwrap();
     let mut grid_data = UTFGrid {
         data: HashMap::new(),
         grid: grid_key_json.grid,
@@ -315,8 +270,8 @@ pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<(UTF
         let v: JSONValue = serde_json::from_str(&v).unwrap();
         grid_data.data.insert(k, v);
     }
-    let content_type = format!("{}", data_format);
-    Ok((grid_data, content_type))
+
+    Ok(grid_data)
 }
 
 pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Vec<u8> {
@@ -338,20 +293,20 @@ pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Vec<u8> {
         .unwrap_or(get_blank_image())
 }
 
-pub fn get_data_format(data: &Vec<u8>) -> DataFormat {
+pub fn get_data_format(data: &Vec<u8>) -> utils::DataFormat {
     match data {
-        v if &v[0..2] == b"\x1f\x8b" => DataFormat::GZIP, // this masks PBF format too
-        v if &v[0..2] == b"\x78\x9c" => DataFormat::ZLIB,
-        v if &v[0..8] == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" => DataFormat::PNG,
-        v if &v[0..3] == b"\xFF\xD8\xFF" => DataFormat::JPG,
+        v if &v[0..2] == b"\x1f\x8b" => utils::DataFormat::GZIP, // this masks PBF format too
+        v if &v[0..2] == b"\x78\x9c" => utils::DataFormat::ZLIB,
+        v if &v[0..8] == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" => utils::DataFormat::PNG,
+        v if &v[0..3] == b"\xFF\xD8\xFF" => utils::DataFormat::JPG,
         v if &v[0..14] == b"\x52\x49\x46\x46\xc0\x00\x00\x00\x57\x45\x42\x50\x56\x50" => {
-            DataFormat::WEBP
+            utils::DataFormat::WEBP
         }
-        _ => DataFormat::UNKNOWN,
+        _ => utils::DataFormat::UNKNOWN,
     }
 }
 
-pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Result<DataFormat> {
+pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Result<utils::DataFormat> {
     let query = match category {
         "tile" => r#"SELECT tile_data FROM tiles LIMIT 1"#,
         "grid" => r#"SELECT grid_utfgrid FROM grid_utfgrid LIMIT 1"#,
@@ -361,23 +316,12 @@ pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Res
         Ok(s) => s,
         Err(_) => return Err(Error),
     };
-    let data_format: DataFormat = statement
+    let data_format: utils::DataFormat = statement
         .query_row(NO_PARAMS, |row| {
             Ok(get_data_format(&row.get::<_, Vec<u8>>(0).unwrap()))
         })
-        .unwrap_or(DataFormat::UNKNOWN);
+        .unwrap_or(utils::DataFormat::UNKNOWN);
     Ok(data_format)
-}
-
-pub fn get_content_type(tile_format: &str) -> String {
-    match tile_format {
-        "png" => String::from("image/png"),
-        "jpg" | "jpeg" => String::from("image/jpg"),
-        "pbf" => String::from("application/x-protobuf"),
-        "webp" => String::from("image/webp"),
-        "json" => String::from("application/json"),
-        _ => String::from(""),
-    }
 }
 
 pub fn get_blank_image() -> Vec<u8> {

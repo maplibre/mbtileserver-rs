@@ -12,6 +12,7 @@ use rusqlite::{Connection, OpenFlags};
 use serde_json;
 
 use crate::tiles;
+use crate::utils;
 
 lazy_static! {
     static ref TILE_URL_RE: Regex =
@@ -47,7 +48,7 @@ pub fn tile_map(tile_path: &PathBuf) -> Response<Body> {
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
     let template = match tiles::get_data_format_via_query(&connection, "tile") {
         Ok(tile_format) => match tile_format {
-            tiles::DataFormat::PBF => "templates/map_vector.html",
+            utils::DataFormat::PBF => "templates/map_vector.html",
             _ => "templates/map.html",
         },
         _ => return server_error(),
@@ -107,16 +108,21 @@ pub async fn get_service(
 
             return match data_format {
                 "json" => match tiles::get_grid_data(tile_path, z, x, y) {
-                    Ok((data, content_type)) => Ok(Response::builder()
-                        .header(header::CONTENT_TYPE, tiles::get_content_type("json"))
-                        .header(header::CONTENT_ENCODING, content_type)
-                        .body(Body::from(serde_json::to_string(&data).unwrap()))
-                        .unwrap()),
+                    Ok(data) => {
+                        let data = serde_json::to_vec(&data).unwrap();
+                        Ok(Response::builder()
+                            .header(header::CONTENT_TYPE, utils::DataFormat::JSON.content_type())
+                            .header(header::CONTENT_ENCODING, "gzip")
+                            .body(Body::from(utils::encode(&data)))
+                            .unwrap())
+                    }
                     Err(_) => Ok(not_found()),
                 },
                 _ => Ok(Response::builder()
-                    .header(header::CONTENT_TYPE, tiles::get_content_type(&data_format))
-                    // .header(header::CONTENT_ENCODING, "gzip")
+                    .header(
+                        header::CONTENT_TYPE,
+                        utils::DataFormat::new(data_format).content_type(),
+                    )
                     .body(Body::from(tiles::get_tile_data(tile_path, z, x, y)))
                     .unwrap()),
             };

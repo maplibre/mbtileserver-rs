@@ -13,6 +13,7 @@ mod config;
 mod errors;
 mod service;
 mod tiles;
+mod utils;
 
 #[tokio::main]
 async fn main() {
