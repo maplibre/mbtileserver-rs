@@ -101,16 +101,23 @@ pub async fn get_service(
             };
 
             return match data_format {
-                "json" => match get_grid_data(&tile_meta.path, z, x, y) {
-                    Ok(data) => {
-                        let data = serde_json::to_vec(&data).unwrap();
-                        Ok(Response::builder()
-                            .header(header::CONTENT_TYPE, utils::DataFormat::JSON.content_type())
-                            .header(header::CONTENT_ENCODING, "gzip")
-                            .body(Body::from(utils::encode(&data)))
-                            .unwrap())
-                    }
-                    Err(_) => Ok(not_found()),
+                "json" => match tile_meta.grid_format {
+                    Some(grid_format) => match get_grid_data(&tile_meta.path, grid_format, z, x, y)
+                    {
+                        Ok(data) => {
+                            let data = serde_json::to_vec(&data).unwrap();
+                            Ok(Response::builder()
+                                .header(
+                                    header::CONTENT_TYPE,
+                                    utils::DataFormat::JSON.content_type(),
+                                )
+                                .header(header::CONTENT_ENCODING, "gzip")
+                                .body(Body::from(utils::encode(&data)))
+                                .unwrap())
+                        }
+                        Err(_) => Ok(not_found()),
+                    },
+                    None => Ok(not_found()),
                 },
                 _ => Ok(Response::builder()
                     .header(

@@ -213,7 +213,13 @@ fn get_grid_info(connection: &Connection) -> Option<DataFormat> {
     None
 }
 
-pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<UTFGrid> {
+pub fn get_grid_data(
+    tile_path: &PathBuf,
+    data_format: DataFormat,
+    z: u32,
+    x: u32,
+    y: u32,
+) -> Result<UTFGrid> {
     let connection =
         Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
     let mut statement = connection
@@ -232,7 +238,6 @@ pub fn get_grid_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Result<UTFG
         Ok(d) => d,
         Err(_) => return Err(Error),
     };
-    let data_format = get_data_format(&grid_data);
     let grid_key_json: UTFGridKeys =
         serde_json::from_str(&decode(grid_data, data_format).unwrap()).unwrap();
     let mut grid_data = UTFGrid {
@@ -275,7 +280,7 @@ pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Vec<u8> {
     let mut statement = connection
         .prepare(
             r#"SELECT tile_data
-                FROM tiles
+                 FROM tiles
                 WHERE zoom_level = ?1
                   AND tile_column = ?2
                   AND tile_row = ?3
