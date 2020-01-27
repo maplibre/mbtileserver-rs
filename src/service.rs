@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -7,11 +8,11 @@ use hyper::{header, Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
-use rusqlite::{Connection, OpenFlags};
-
 use serde_json;
 
-use crate::tiles;
+use crate::tiles::{
+    get_grid_data, get_template, get_tile_data, TileMeta, TileMetaJSON, TileSummaryJSON,
+};
 use crate::utils;
 
 lazy_static! {
@@ -44,15 +45,11 @@ fn bad_request(msg: String) -> Response<Body> {
 }
 
 pub fn tile_map(tile_path: &PathBuf) -> Response<Body> {
-    let connection =
-        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
-    let template = match tiles::get_data_format_via_query(&connection, "tile") {
-        Ok(tile_format) => match tile_format {
-            utils::DataFormat::PBF => "templates/map_vector.html",
-            _ => "templates/map.html",
-        },
-        _ => return server_error(),
+    let template = match get_template(tile_path) {
+        Ok(template) => template,
+        Err(_) => return server_error(),
     };
+
     let file = File::open(template).unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
@@ -75,10 +72,8 @@ fn assets(path: &str) -> Response<Body> {
 
 pub async fn get_service(
     request: Request<Body>,
-    directory: PathBuf,
+    tilesets: HashMap<String, TileMeta>,
 ) -> Result<Response<Body>, hyper::Error> {
-    let tilesets = tiles::discover_tilesets(String::from(""), &directory);
-
     let path = request.uri().path();
     let scheme = match request.uri().scheme_str() {
         Some(scheme) => format!("{}://", scheme),
@@ -92,9 +87,8 @@ pub async fn get_service(
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
-            let tile_path = tilesets
-                .get(matches.name("tile_path").unwrap().as_str())
-                .unwrap();
+            let tile_path = matches.name("tile_path").unwrap().as_str();
+            let tile_meta = tilesets.get(tile_path).unwrap();
             let z = matches.name("z").unwrap().as_str().parse::<u32>().unwrap();
             let x = matches.name("x").unwrap().as_str().parse::<u32>().unwrap();
             let y = matches.name("y").unwrap().as_str().parse::<u32>().unwrap();
@@ -107,7 +101,7 @@ pub async fn get_service(
             };
 
             return match data_format {
-                "json" => match tiles::get_grid_data(tile_path, z, x, y) {
+                "json" => match get_grid_data(&tile_meta.path, z, x, y) {
                     Ok(data) => {
                         let data = serde_json::to_vec(&data).unwrap();
                         Ok(Response::builder()
@@ -123,7 +117,7 @@ pub async fn get_service(
                         header::CONTENT_TYPE,
                         utils::DataFormat::new(data_format).content_type(),
                     )
-                    .body(Body::from(tiles::get_tile_data(tile_path, z, x, y)))
+                    .body(Body::from(get_tile_data(&tile_meta.path, z, x, y)))
                     .unwrap()),
             };
         }
@@ -132,9 +126,14 @@ pub async fn get_service(
                 let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
                 if segments.len() == 1 {
                     // Root url (/services): show all services
-                    let resp_json =
-                        serde_json::to_string(&tiles::get_tiles_list(&base_url, &tilesets))
-                            .unwrap(); // TODO handle error
+                    let mut tiles_summary = Vec::new();
+                    for (tile_name, tile_meta) in tilesets {
+                        tiles_summary.push(TileSummaryJSON {
+                            image_type: tile_meta.tile_format,
+                            url: format!("{}/{}", base_url, tile_name),
+                        });
+                    }
+                    let resp_json = serde_json::to_string(&tiles_summary).unwrap(); // TODO handle error
                     return Ok(Response::builder()
                         .header(header::CONTENT_TYPE, "application/json")
                         .body(Body::from(resp_json))
@@ -144,22 +143,22 @@ pub async fn get_service(
                 if segments[segments.len() - 1] == "map" {
                     // Tileset map preview (/services/<tileset-path>/map)
                     let tile_name = segments[1..(segments.len() - 1)].join("/");
-                    let tile_path = match tilesets.get(&tile_name) {
-                        Some(tile_path) => tile_path,
+                    let tile_meta = match tilesets.get(&tile_name) {
+                        Some(tile_meta) => tile_meta,
                         None => {
                             return Ok(bad_request(format!(
                                 "Tileset does not exist: {}",
-                                tile_name
+                                segments[segments.len() - 1]
                             )))
                         }
                     };
-                    return Ok(tile_map(tile_path));
+                    return Ok(tile_map(&tile_meta.path));
                 }
 
                 // Tileset details (/services/<tileset-path>)
                 let tile_name = segments[1..].join("/");
-                let tile_path = match tilesets.get(&tile_name) {
-                    Some(tile_path) => tile_path,
+                let tile_meta = match tilesets.get(&tile_name) {
+                    Some(tile_meta) => tile_meta.clone(),
                     None => {
                         return Ok(bad_request(format!(
                             "Tileset does not exist: {}",
@@ -172,16 +171,41 @@ pub async fn get_service(
                     None => String::new(),
                 };
 
-                match tiles::get_tile_details(&base_url, &tile_name, tile_path, query_string) {
-                    Ok(metadata) => {
-                        let resp_json = serde_json::to_string(&metadata).unwrap(); // TODO handle error
-                        return Ok(Response::builder()
-                            .header(header::CONTENT_TYPE, "application/json")
-                            .body(Body::from(String::from(resp_json)))
-                            .unwrap()); // TODO handle error
-                    }
-                    Err(_) => return Ok(server_error()),
-                }
+                let tile_meta_json = TileMetaJSON {
+                    name: tile_meta.name,
+                    version: tile_meta.version,
+                    map: format!("{}/{}/{}", base_url, tile_name, "map"),
+                    tiles: vec![format!(
+                        "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
+                        base_url,
+                        tile_name,
+                        tile_meta.tile_format.format(),
+                        query_string
+                    )],
+                    tilejson: tile_meta.tilejson,
+                    scheme: tile_meta.scheme,
+                    id: tile_meta.id,
+                    format: tile_meta.tile_format,
+                    grids: match tile_meta.grid_format {
+                        Some(_) => Some(vec![format!(
+                            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
+                            base_url, tile_name, query_string
+                        )]),
+                        None => None,
+                    },
+                    bounds: tile_meta.bounds,
+                    minzoom: tile_meta.minzoom,
+                    maxzoom: tile_meta.maxzoom,
+                    description: tile_meta.description,
+                    attribution: tile_meta.attribution,
+                    legend: tile_meta.legend,
+                    template: tile_meta.template,
+                };
+
+                return Ok(Response::builder()
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(serde_json::to_string(&tile_meta_json).unwrap()))
+                    .unwrap()); // TODO handle error
             }
             if path.starts_with("/static") {
                 // Serve static files for map preview

@@ -1,7 +1,6 @@
 use std::fs::read_dir;
 use std::path::PathBuf;
 
-extern crate clap;
 use clap::{App, Arg};
 
 #[derive(Clone)]

@@ -1,3 +1,4 @@
+extern crate clap;
 extern crate flate2;
 extern crate hyper;
 #[macro_use]
@@ -23,13 +24,15 @@ async fn main() {
 
     println!("Serving tiles from {}", args.directory.display());
 
+    let tilesets = tiles::discover_tilesets(String::new(), args.directory);
+
     let addr = ([0, 0, 0, 0], args.port).into();
 
     let make_service = make_service_fn(move |_conn| {
-        let direcoty = args.directory.clone();
+        let tilesets = tilesets.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                service::get_service(req, direcoty.clone())
+                service::get_service(req, tilesets.clone())
             }))
         }
     });
