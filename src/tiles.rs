@@ -3,9 +3,9 @@ use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::PathBuf;
 
-use rusqlite::{params, Connection, OpenFlags, NO_PARAMS};
+use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::{params, OpenFlags, NO_PARAMS};
 
-use serde;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JSONValue;
 
@@ -13,8 +13,11 @@ use crate::errors::{Error, Result};
 
 use crate::utils::{decode, get_data_format, DataFormat};
 
+type Connection = r2d2::PooledConnection<SqliteConnectionManager>;
+
 #[derive(Clone, Debug)]
 pub struct TileMeta {
+    pub connection_pool: r2d2::Pool<SqliteConnectionManager>,
     pub path: PathBuf,
     pub name: Option<String>,
     pub version: Option<String>,
@@ -74,10 +77,8 @@ pub struct UTFGrid {
     pub keys: Vec<String>,
 }
 
-pub fn get_template(tile_path: &PathBuf) -> Result<&'static str> {
-    let connection =
-        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
-    match get_data_format_via_query(&connection, "tile") {
+pub fn get_template(connection: &Connection) -> Result<&'static str> {
+    match get_data_format_via_query(connection, "tile") {
         Ok(tile_format) => match tile_format {
             DataFormat::PBF => Ok("templates/map_vector.html"),
             _ => Ok("templates/map.html"),
@@ -105,10 +106,13 @@ pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Res
 }
 
 pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
-    let connection = match Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY) {
-        Ok(connection) => connection,
+    let manager = SqliteConnectionManager::file(path).with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY);
+    let connection_pool = match r2d2::Pool::new(manager) {
+        Ok(connection_pool) => connection_pool,
         Err(_) => return Err(Error),
     };
+
+    let connection = connection_pool.get().unwrap();
 
     // 'tiles', 'metadata' tables or views must be present
     let query = r#"SELECT count(*) FROM sqlite_master WHERE name IN ('tiles', 'metadata')"#;
@@ -126,11 +130,15 @@ pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta>
     };
 
     let tile_format = match get_data_format_via_query(&connection, "tile") {
-        Ok(tile_format) => tile_format,
+        Ok(tile_format) => match tile_format {
+            DataFormat::UNKNOWN => return Err(Error),
+            _ => tile_format
+        },
         _ => return Err(Error),
     };
 
     let mut metadata = TileMeta {
+        connection_pool,
         path: PathBuf::from(path),
         name: None,
         version: None,
@@ -214,14 +222,12 @@ fn get_grid_info(connection: &Connection) -> Option<DataFormat> {
 }
 
 pub fn get_grid_data(
-    tile_path: &PathBuf,
+    connection: &Connection,
     data_format: DataFormat,
     z: u32,
     x: u32,
     y: u32,
 ) -> Result<UTFGrid> {
-    let connection =
-        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
     let mut statement = connection
         .prepare(
             r#"SELECT grid
@@ -273,10 +279,7 @@ pub fn get_grid_data(
     Ok(grid_data)
 }
 
-pub fn get_tile_data(tile_path: &PathBuf, z: u32, x: u32, y: u32) -> Vec<u8> {
-    let connection =
-        Connection::open_with_flags(tile_path, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
-
+pub fn get_tile_data(connection: &Connection, z: u32, x: u32, y: u32) -> Vec<u8> {
     let mut statement = connection
         .prepare(
             r#"SELECT tile_data

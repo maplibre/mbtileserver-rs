@@ -2,13 +2,10 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::path::PathBuf;
 
 use hyper::{header, Body, Request, Response, StatusCode};
 
 use regex::Regex;
-
-use serde_json;
 
 use crate::tiles::{
     get_grid_data, get_template, get_tile_data, TileMeta, TileMetaJSON, TileSummaryJSON,
@@ -44,8 +41,8 @@ fn bad_request(msg: String) -> Response<Body> {
         .unwrap()
 }
 
-pub fn tile_map(tile_path: &PathBuf) -> Response<Body> {
-    let template = match get_template(tile_path) {
+pub fn tile_map(tile_meta: &TileMeta) -> Response<Body> {
+    let template = match get_template(&tile_meta.connection_pool.get().unwrap()) {
         Ok(template) => template,
         Err(_) => return server_error(),
     };
@@ -102,8 +99,13 @@ pub async fn get_service(
 
             return match data_format {
                 "json" => match tile_meta.grid_format {
-                    Some(grid_format) => match get_grid_data(&tile_meta.path, grid_format, z, x, y)
-                    {
+                    Some(grid_format) => match get_grid_data(
+                        &tile_meta.connection_pool.get().unwrap(),
+                        grid_format,
+                        z,
+                        x,
+                        y,
+                    ) {
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
                             Ok(Response::builder()
@@ -124,7 +126,12 @@ pub async fn get_service(
                         header::CONTENT_TYPE,
                         utils::DataFormat::new(data_format).content_type(),
                     )
-                    .body(Body::from(get_tile_data(&tile_meta.path, z, x, y)))
+                    .body(Body::from(get_tile_data(
+                        &tile_meta.connection_pool.get().unwrap(),
+                        z,
+                        x,
+                        y,
+                    )))
                     .unwrap()),
             };
         }
@@ -159,7 +166,7 @@ pub async fn get_service(
                             )))
                         }
                     };
-                    return Ok(tile_map(&tile_meta.path));
+                    return Ok(tile_map(&tile_meta));
                 }
 
                 // Tileset details (/services/<tileset-path>)

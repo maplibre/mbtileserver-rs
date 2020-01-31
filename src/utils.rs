@@ -4,7 +4,6 @@ use flate2::read::{GzDecoder, ZlibDecoder};
 use flate2::write::GzEncoder;
 use flate2::Compression;
 
-use serde;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{Error, Result};

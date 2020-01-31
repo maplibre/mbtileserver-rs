@@ -3,6 +3,8 @@ extern crate flate2;
 extern crate hyper;
 #[macro_use]
 extern crate lazy_static;
+extern crate r2d2;
+extern crate r2d2_sqlite;
 extern crate regex;
 extern crate serde;
 extern crate serde_json;
