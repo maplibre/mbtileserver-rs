@@ -89,10 +89,12 @@
                 )
             ];
 
-            var map = L.map("Map", {});
+            var map = L.map("Map", {
+                preferCanvas: true
+            });
 
             var layer = null;
-            d3.json("./", function(tileJSON) {
+            d3.json("./").then(function(tileJSON) {
                 if (tileJSON.bounds) {
                     var b = tileJSON.bounds;
 
@@ -109,10 +111,30 @@
                     map.setZoom(tileJSON.maxzoom);
                 }
 
-                layer = L.tileLayer(tileJSON.tiles[0], {
-                    minZoom: tileJSON.minzoom || 0,
-                    maxZoom: tileJSON.maxzoom || 23
-                });
+                if (tileJSON.format === 'pbf') {
+                    var vectorTileLayerStyles = {};
+                    tileJSON.vector_layers.forEach(function(vl) {
+                        vectorTileLayerStyles[vl.id] = function() {
+                            return [
+                                { radius: 6, opacity: 1, color: '#F00' },  // point
+                                { width: 2, opacity: 0.75, color: 'red' },  // line
+                                { fill: true, opacity: 0.5, fillColor: 'orange' },  // poly  
+                            ];
+                        };
+                    });
+                    layer = L.vectorGrid.protobuf(
+                        tileJSON.tiles[0],
+                        {
+                            rendererFactory: L.canvas.tile,
+                            vectorTileLayerStyles: vectorTileLayerStyles
+                        }
+                    );
+                } else {
+                    layer = L.tileLayer(tileJSON.tiles[0], {
+                        minZoom: tileJSON.minzoom || 0,
+                        maxZoom: tileJSON.maxzoom || 23
+                    });
+                }
 
                 map.addLayer(layer);
 

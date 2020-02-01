@@ -43,13 +43,8 @@ fn bad_request(msg: String) -> Response<Body> {
         .unwrap()
 }
 
-pub fn tile_map(tile_format: &utils::DataFormat) -> Response<Body> {
-    let template = match tile_format {
-        utils::DataFormat::PBF => "templates/map_vector.html",
-        _ => "templates/map.html",
-    };
-
-    let file = File::open(template).unwrap();
+pub fn tile_map() -> Response<Body> {
+    let file = File::open("templates/map.html").unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
@@ -168,17 +163,7 @@ pub async fn get_service(
 
                 if segments[segments.len() - 1] == "map" {
                     // Tileset map preview (/services/<tileset-path>/map)
-                    let tile_name = segments[1..(segments.len() - 1)].join("/");
-                    let tile_meta = match tilesets.get(&tile_name) {
-                        Some(tile_meta) => tile_meta,
-                        None => {
-                            return Ok(bad_request(format!(
-                                "Tileset does not exist: {}",
-                                segments[segments.len() - 1]
-                            )))
-                        }
-                    };
-                    return Ok(tile_map(&tile_meta.tile_format));
+                    return Ok(tile_map());
                 }
 
                 // Tileset details (/services/<tileset-path>)
