@@ -7,9 +7,9 @@ use hyper::{header, Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
-use crate::tiles::{
-    get_grid_data, get_template, get_tile_data, TileMeta, TileMetaJSON, TileSummaryJSON,
-};
+use serde_json::json;
+
+use crate::tiles::{get_grid_data, get_tile_data, TileMeta, TileSummaryJSON};
 use crate::utils;
 
 lazy_static! {
@@ -17,6 +17,7 @@ lazy_static! {
         Regex::new(r"^/services/(?P<tile_path>.*)/tiles/(?P<z>\d+)/(?P<x>\d+)/(?P<y>\d+)\.(?P<format>[a-zA-Z]+)/?(\?(?P<query>.*))?").unwrap();
 }
 
+#[allow(dead_code)]
 static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
 static NOT_FOUND: &[u8] = b"Not Found";
 
@@ -27,6 +28,7 @@ fn not_found() -> Response<Body> {
         .unwrap()
 }
 
+#[allow(dead_code)]
 fn server_error() -> Response<Body> {
     Response::builder()
         .status(StatusCode::INTERNAL_SERVER_ERROR)
@@ -41,10 +43,10 @@ fn bad_request(msg: String) -> Response<Body> {
         .unwrap()
 }
 
-pub fn tile_map(tile_meta: &TileMeta) -> Response<Body> {
-    let template = match get_template(&tile_meta.connection_pool.get().unwrap()) {
-        Ok(template) => template,
-        Err(_) => return server_error(),
+pub fn tile_map(tile_format: &utils::DataFormat) -> Response<Body> {
+    let template = match tile_format {
+        utils::DataFormat::PBF => "templates/map_vector.html",
+        _ => "templates/map.html",
     };
 
     let file = File::open(template).unwrap();
@@ -121,6 +123,16 @@ pub async fn get_service(
                     },
                     None => Ok(not_found()),
                 },
+                "pbf" => Ok(Response::builder()
+                    .header(header::CONTENT_TYPE, utils::DataFormat::PBF.content_type())
+                    .header(header::CONTENT_ENCODING, "gzip")
+                    .body(Body::from(get_tile_data(
+                        &tile_meta.connection_pool.get().unwrap(),
+                        z,
+                        x,
+                        y,
+                    )))
+                    .unwrap()),
                 _ => Ok(Response::builder()
                     .header(
                         header::CONTENT_TYPE,
@@ -166,7 +178,7 @@ pub async fn get_service(
                             )))
                         }
                     };
-                    return Ok(tile_map(&tile_meta));
+                    return Ok(tile_map(&tile_meta.tile_format));
                 }
 
                 // Tileset details (/services/<tileset-path>)
@@ -185,35 +197,45 @@ pub async fn get_service(
                     None => String::new(),
                 };
 
-                let tile_meta_json = TileMetaJSON {
-                    name: tile_meta.name,
-                    version: tile_meta.version,
-                    map: format!("{}/{}/{}", base_url, tile_name, "map"),
-                    tiles: vec![format!(
+                let mut tile_meta_json = json!({
+                    "name": tile_meta.name,
+                    "version": tile_meta.version,
+                    "map": format!("{}/{}/{}", base_url, tile_name, "map"),
+                    "tiles": vec![format!(
                         "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
                         base_url,
                         tile_name,
                         tile_meta.tile_format.format(),
                         query_string
                     )],
-                    tilejson: tile_meta.tilejson,
-                    scheme: tile_meta.scheme,
-                    id: tile_meta.id,
-                    format: tile_meta.tile_format,
-                    grids: match tile_meta.grid_format {
+                    "tilejson": tile_meta.tilejson,
+                    "scheme": tile_meta.scheme,
+                    "id": tile_meta.id,
+                    "format": tile_meta.tile_format,
+                    "grids": match tile_meta.grid_format {
                         Some(_) => Some(vec![format!(
                             "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
                             base_url, tile_name, query_string
                         )]),
                         None => None,
                     },
-                    bounds: tile_meta.bounds,
-                    minzoom: tile_meta.minzoom,
-                    maxzoom: tile_meta.maxzoom,
-                    description: tile_meta.description,
-                    attribution: tile_meta.attribution,
-                    legend: tile_meta.legend,
-                    template: tile_meta.template,
+                    "bounds": tile_meta.bounds,
+                    "center": tile_meta.center,
+                    "minzoom": tile_meta.minzoom,
+                    "maxzoom": tile_meta.maxzoom,
+                    "description": tile_meta.description,
+                    "attribution": tile_meta.attribution,
+                    "type": tile_meta.layer_type,
+                    "legend": tile_meta.legend,
+                    "template": tile_meta.template,
+                });
+                match tile_meta.json {
+                    Some(json_data) => {
+                        for (k, v) in json_data.as_object().unwrap() {
+                            tile_meta_json[k] = v.clone();
+                        }
+                    }
+                    None => (),
                 };
 
                 return Ok(Response::builder()

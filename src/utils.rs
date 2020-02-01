@@ -88,7 +88,7 @@ pub fn encode(data: &[u8]) -> Vec<u8> {
 
 pub fn get_data_format(data: &Vec<u8>) -> DataFormat {
     match data {
-        v if &v[0..2] == b"\x1f\x8b" => DataFormat::GZIP, // this masks PBF format too
+        v if &v[0..2] == b"\x1f\x8b" => DataFormat::GZIP,
         v if &v[0..2] == b"\x78\x9c" => DataFormat::ZLIB,
         v if &v[0..8] == b"\x89\x50\x4E\x47\x0D\x0A\x1A\x0A" => DataFormat::PNG,
         v if &v[0..3] == b"\xFF\xD8\xFF" => DataFormat::JPG,

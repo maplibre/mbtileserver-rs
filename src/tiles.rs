@@ -27,12 +27,15 @@ pub struct TileMeta {
     pub tile_format: DataFormat,
     pub grid_format: Option<DataFormat>,
     pub bounds: Option<Vec<f64>>,
+    pub center: Option<Vec<f64>>,
     pub minzoom: Option<u32>,
     pub maxzoom: Option<u32>,
     pub description: Option<String>,
     pub attribution: Option<String>,
+    pub layer_type: Option<String>,
     pub legend: Option<String>,
     pub template: Option<String>,
+    pub json: Option<JSONValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,27 +43,6 @@ pub struct TileMeta {
 pub struct TileSummaryJSON {
     pub image_type: DataFormat,
     pub url: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TileMetaJSON {
-    pub name: Option<String>,
-    pub version: Option<String>,
-    pub map: String,
-    pub tiles: Vec<String>,
-    pub tilejson: String,
-    pub scheme: String,
-    pub id: String,
-    pub format: DataFormat,
-    pub grids: Option<Vec<String>>,
-    pub bounds: Option<Vec<f64>>,
-    pub minzoom: Option<u32>,
-    pub maxzoom: Option<u32>,
-    pub description: Option<String>,
-    pub attribution: Option<String>,
-    pub legend: Option<String>,
-    pub template: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -75,16 +57,6 @@ pub struct UTFGrid {
     pub data: HashMap<String, JSONValue>,
     pub grid: Vec<String>,
     pub keys: Vec<String>,
-}
-
-pub fn get_template(connection: &Connection) -> Result<&'static str> {
-    match get_data_format_via_query(connection, "tile") {
-        Ok(tile_format) => match tile_format {
-            DataFormat::PBF => Ok("templates/map_vector.html"),
-            _ => Ok("templates/map.html"),
-        },
-        _ => Err(Error),
-    }
 }
 
 pub fn get_data_format_via_query(connection: &Connection, category: &str) -> Result<DataFormat> {
@@ -132,7 +104,8 @@ pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta>
     let tile_format = match get_data_format_via_query(&connection, "tile") {
         Ok(tile_format) => match tile_format {
             DataFormat::UNKNOWN => return Err(Error),
-            _ => tile_format
+            DataFormat::GZIP => DataFormat::PBF, // GZIP masks PBF format too
+            _ => tile_format,
         },
         _ => return Err(Error),
     };
@@ -148,12 +121,15 @@ pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta>
         tile_format,
         grid_format: get_grid_info(&connection),
         bounds: None,
+        center: None,
         minzoom: None,
         maxzoom: None,
         description: None,
         attribution: None,
+        layer_type: None,
         legend: None,
         template: None,
+        json: None,
     };
 
     let mut statement = connection
@@ -170,12 +146,17 @@ pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta>
             "bounds" => {
                 metadata.bounds = Some(value.split(",").filter_map(|s| s.parse().ok()).collect())
             }
+            "center" => {
+                metadata.center = Some(value.split(",").filter_map(|s| s.parse().ok()).collect())
+            }
             "minzoom" => metadata.minzoom = Some(value.parse().unwrap()),
             "maxzoom" => metadata.maxzoom = Some(value.parse().unwrap()),
             "description" => metadata.description = Some(value),
             "attribution" => metadata.attribution = Some(value),
+            "type" => metadata.layer_type = Some(value),
             "legend" => metadata.legend = Some(value),
             "template" => metadata.template = Some(value),
+            "json" => metadata.json = Some(serde_json::from_str(&value).unwrap()),
             _ => (),
         }
     }
