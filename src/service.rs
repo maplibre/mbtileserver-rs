@@ -10,7 +10,7 @@ use regex::Regex;
 use serde_json::json;
 
 use crate::tiles::{get_grid_data, get_tile_data, TileMeta, TileSummaryJSON};
-use crate::utils;
+use crate::utils::{encode, get_blank_image, DataFormat};
 
 lazy_static! {
     static ref TILE_URL_RE: Regex =
@@ -20,11 +20,19 @@ lazy_static! {
 #[allow(dead_code)]
 static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
 static NOT_FOUND: &[u8] = b"Not Found";
+static NO_CONTENT: &[u8] = b"";
 
 fn not_found() -> Response<Body> {
     Response::builder()
         .status(StatusCode::NOT_FOUND)
         .body(NOT_FOUND.into())
+        .unwrap()
+}
+
+fn no_content() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::NO_CONTENT)
+        .body(NO_CONTENT.into())
         .unwrap()
 }
 
@@ -106,40 +114,37 @@ pub async fn get_service(
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
                             Ok(Response::builder()
-                                .header(
-                                    header::CONTENT_TYPE,
-                                    utils::DataFormat::JSON.content_type(),
-                                )
+                                .header(header::CONTENT_TYPE, DataFormat::JSON.content_type())
                                 .header(header::CONTENT_ENCODING, "gzip")
-                                .body(Body::from(utils::encode(&data)))
+                                .body(Body::from(encode(&data)))
                                 .unwrap())
                         }
-                        Err(_) => Ok(not_found()),
+                        Err(_) => Ok(no_content()),
                     },
                     None => Ok(not_found()),
                 },
-                "pbf" => Ok(Response::builder()
-                    .header(header::CONTENT_TYPE, utils::DataFormat::PBF.content_type())
-                    .header(header::CONTENT_ENCODING, "gzip")
-                    .body(Body::from(get_tile_data(
-                        &tile_meta.connection_pool.get().unwrap(),
-                        z,
-                        x,
-                        y,
-                    )))
-                    .unwrap()),
-                _ => Ok(Response::builder()
-                    .header(
-                        header::CONTENT_TYPE,
-                        utils::DataFormat::new(data_format).content_type(),
-                    )
-                    .body(Body::from(get_tile_data(
-                        &tile_meta.connection_pool.get().unwrap(),
-                        z,
-                        x,
-                        y,
-                    )))
-                    .unwrap()),
+                "pbf" => match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
+                    Ok(data) => Ok(Response::builder()
+                        .header(header::CONTENT_TYPE, DataFormat::PBF.content_type())
+                        .header(header::CONTENT_ENCODING, "gzip")
+                        .body(Body::from(data))
+                        .unwrap()),
+                    Err(_) => Ok(no_content()),
+                },
+                _ => {
+                    let data =
+                        match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
+                            Ok(data) => data,
+                            Err(_) => get_blank_image(),
+                        };
+                    Ok(Response::builder()
+                        .header(
+                            header::CONTENT_TYPE,
+                            DataFormat::new(data_format).content_type(),
+                        )
+                        .body(Body::from(data))
+                        .unwrap())
+                }
             };
         }
         None => {

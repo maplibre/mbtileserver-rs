@@ -76,7 +76,7 @@ pub fn decode(data: Vec<u8>, data_type: DataFormat) -> Result<String> {
             z.read_to_string(&mut s).unwrap();
             Ok(s)
         }
-        _ => Err(Error),
+        _ => Err(Error::InvalidDataFormat(String::from(data_type.format()))),
     }
 }
 
@@ -97,4 +97,9 @@ pub fn get_data_format(data: &Vec<u8>) -> DataFormat {
         }
         _ => DataFormat::UNKNOWN,
     }
+}
+
+pub fn get_blank_image() -> Vec<u8> {
+    let image = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\x00\x00\x00\xa7z=\xda\x00\x00\x00\x01tRNS\x00@\xe6\xd8f\x00\x00\x00\x1fIDATh\xde\xed\xc1\x01\r\x00\x00\x00\xc2 \xfb\xa76\xc77`\x00\x00\x00\x00\x00\x00\x00\x00q\x07!\x00\x00\x01\xa7W)\xd7\x00\x00\x00\x00IEND\xaeB`\x82";
+    image.to_vec()
 }
