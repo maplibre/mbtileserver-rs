@@ -52,11 +52,10 @@ fn bad_request(msg: String) -> Response<Body> {
 }
 
 pub fn tile_map() -> Response<Body> {
-    let file = File::open("templates/map.html").unwrap();
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader.read_to_string(&mut contents).unwrap();
-    let body = Body::from(contents);
+    let css = include_str!("../templates/static/dist/core.min.css");
+    let js = include_str!("../templates/static/dist/core.min.js");
+    let html = include_str!("../templates/map.html");
+    let body = Body::from(html.replace("{{css}}", css).replace("{{js}}", js));
     Response::new(body)
 }
 
