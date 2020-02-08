@@ -290,3 +290,60 @@ pub fn get_tile_data(connection: &Connection, z: u32, x: u32, y: u32) -> Result<
         Err(err) => Err(Error::DBConnection(err)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn get_list_of_valid_tilesets() {
+        let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
+        // 2 out of 7 tilesets in ./tiles directory are invalid
+        assert_eq!(tilesets.len(), 5);
+
+        assert!(!tilesets.contains_key("invalid"));
+        assert!(!tilesets.contains_key("invalid-tile-format"));
+    }
+
+    #[test]
+    fn get_tileset_metadata() {
+        let tileset_details = get_tile_details(
+            &PathBuf::from("./tiles/geography-class-png.mbtiles"),
+            "geography-class-png",
+        )
+        .unwrap();
+        // The rhs values are from metadata table of geography-class-png.mbtiles
+        assert_eq!(tileset_details.name.unwrap(), "Geography Class");
+        assert_eq!(tileset_details.version.unwrap(), "1.0.0");
+        assert_eq!(tileset_details.minzoom.unwrap(), 0);
+        assert_eq!(tileset_details.maxzoom.unwrap(), 1);
+        assert_eq!(
+            tileset_details.bounds.unwrap(),
+            vec![-180.0, -85.0511, 180.0, 85.0511]
+        );
+        assert_eq!(tileset_details.center.unwrap(), vec![0.0, 20.0, 0.0]);
+        assert_eq!(tileset_details.tile_format, DataFormat::PNG);
+
+        let tileset_details = get_tile_details(
+            &PathBuf::from("./tiles/world_cities.mbtiles"),
+            "world_cities",
+        )
+        .unwrap();
+        // The rhs values are from metadata table of world_cities.mbtiles
+        assert_eq!(
+            tileset_details.name.unwrap(),
+            "Major cities from Natural Earth data"
+        );
+        assert_eq!(tileset_details.version.unwrap(), "2");
+        assert_eq!(tileset_details.minzoom.unwrap(), 0);
+        assert_eq!(tileset_details.maxzoom.unwrap(), 6);
+        assert_eq!(
+            tileset_details.bounds.unwrap(),
+            vec![-123.123590, -37.818085, 174.763027, 59.352706]
+        );
+        assert_eq!(
+            tileset_details.center.unwrap(),
+            vec![-75.937500, 38.788894, 6.0]
+        );
+        assert_eq!(tileset_details.tile_format, DataFormat::PBF);
+    }
+}

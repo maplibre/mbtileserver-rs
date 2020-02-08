@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::{Error, Result};
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DataFormat {
     PNG,
