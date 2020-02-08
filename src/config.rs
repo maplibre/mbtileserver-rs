@@ -1,7 +1,7 @@
 use std::fs::read_dir;
 use std::path::PathBuf;
 
-use clap::{App, Arg};
+use clap::{crate_version, App, Arg};
 
 use crate::errors::{Error, Result};
 
@@ -12,7 +12,9 @@ pub struct Args {
 }
 
 pub fn parse() -> Result<Args> {
-    let matches = App::new("MBTiles Server")
+    let matches = App::new("mbtileserver")
+        .about("A simple mbtile server")
+        .version(crate_version!())
         .arg(
             Arg::with_name("directory")
                 .short("d")
