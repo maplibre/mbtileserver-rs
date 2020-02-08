@@ -2,6 +2,9 @@
 
 # rust-mbtileserver
 
+[![Build Status](https://travis-ci.com/ka7eh/rust-mbtileserver.svg?branch=master)](https://travis-ci.com/ka7eh/rust-mbtileserver)
+[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=master)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=master)
+
 _Tested with rust 1.41_
 
 A simple Rust-based server for map tiles stored in mbtiles format.

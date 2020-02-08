@@ -7,6 +7,10 @@ authors = ["ka7eh <kaveh.k.a@gmail.com>"]
 edition = "2018"
 license = "ISC"
 
+[badges]
+travis-ci = { repository = "ka7eh/rust-mbtileserver" }
+coveralls = { repository = "ka7eh/rust-mbtileserver" }
+
 [dependencies]
 clap = "2.33"
 flate2 = "1.0"
