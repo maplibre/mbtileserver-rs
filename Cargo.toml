@@ -1,8 +1,11 @@
 [package]
 name = "mbtileserver"
+description = "A Rust-based mbtiles server"
+repository = "https://github.com/ka7eh/rust-mbtileserver"
 version = "0.1.0"
 authors = ["ka7eh <kaveh.k.a@gmail.com>"]
 edition = "2018"
+license = "ISC"
 
 [dependencies]
 clap = "2.33"

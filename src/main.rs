@@ -11,6 +11,7 @@ extern crate serde_json;
 
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+use std::process;
 
 mod config;
 mod errors;
@@ -22,7 +23,13 @@ mod utils;
 async fn main() {
     pretty_env_logger::init();
 
-    let args = config::parse();
+    let args = match config::parse() {
+        Ok(args) => args,
+        Err(err) => {
+            println!("{}", err);
+            process::exit(1)
+        }
+    };
 
     println!("Serving tiles from {}", args.directory.display());
 

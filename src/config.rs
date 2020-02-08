@@ -3,18 +3,21 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 
+use crate::errors::{Error, Result};
+
 #[derive(Clone)]
 pub struct Args {
     pub directory: PathBuf,
     pub port: u16,
 }
 
-pub fn parse() -> Args {
+pub fn parse() -> Result<Args> {
     let matches = App::new("MBTiles Server")
         .arg(
             Arg::with_name("directory")
                 .short("d")
                 .long("directory")
+                .default_value("./tiles")
                 .help("Tiles directory")
                 .takes_value(true),
         )
@@ -22,18 +25,26 @@ pub fn parse() -> Args {
             Arg::with_name("port")
                 .short("p")
                 .long("port")
+                .default_value("3000")
                 .help("Port")
                 .takes_value(true),
         )
         .get_matches();
 
-    let port = match matches.value_of("port") {
-        Some(p) => p.parse::<u16>().expect("Port must be a positive number"),
-        None => 3000,
+    let port = match matches.value_of("port").unwrap().parse::<u16>() {
+        Ok(p) => p,
+        Err(_) => {
+            return Err(Error::Config(String::from(
+                "Port must be a positive number",
+            )))
+        }
     };
 
-    let directory = PathBuf::from(matches.value_of("directory").unwrap_or("tiles"));
-    read_dir(directory.clone()).expect("Directory does not exists");
+    let directory = PathBuf::from(matches.value_of("directory").unwrap());
+    match read_dir(directory.clone()) {
+        Ok(_) => (),
+        Err(_) => return Err(Error::Config(String::from("Directory does not exists"))),
+    };
 
-    Args { directory, port }
+    Ok(Args { directory, port })
 }
