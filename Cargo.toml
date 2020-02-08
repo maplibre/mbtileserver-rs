@@ -2,7 +2,7 @@
 name = "mbtileserver"
 description = "A Rust-based mbtiles server"
 repository = "https://github.com/ka7eh/rust-mbtileserver"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["ka7eh <kaveh.k.a@gmail.com>"]
 edition = "2018"
 license = "ISC"

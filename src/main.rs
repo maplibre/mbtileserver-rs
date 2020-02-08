@@ -46,7 +46,13 @@ async fn main() {
         }
     });
 
-    let server = Server::bind(&addr).serve(make_service);
+    let server = match Server::try_bind(&addr) {
+        Ok(builder) => builder.serve(make_service),
+        Err(err) => {
+            println!("{}", err);
+            process::exit(1);
+        }
+    };
 
     println!("Listening on http://{}", addr);
 
