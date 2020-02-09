@@ -1,7 +1,4 @@
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
 
 use hyper::{header, Body, Request, Response, StatusCode};
 
@@ -56,18 +53,6 @@ pub fn tile_map() -> Response<Body> {
     let js = include_str!("../templates/static/dist/core.min.js");
     let html = include_str!("../templates/map.html");
     let body = Body::from(html.replace("{{css}}", css).replace("{{js}}", js));
-    Response::new(body)
-}
-
-fn assets(path: &str) -> Response<Body> {
-    let file = match File::open(format!("templates/{}", path)) {
-        Ok(file) => file,
-        Err(_) => return not_found(),
-    };
-    let mut buf_reader = BufReader::new(file);
-    let mut contents = String::new();
-    buf_reader.read_to_string(&mut contents).unwrap();
-    let body = Body::from(contents);
     Response::new(body)
 }
 
@@ -232,11 +217,90 @@ pub async fn get_service(
                     .body(Body::from(serde_json::to_string(&tile_meta_json).unwrap()))
                     .unwrap()); // TODO handle error
             }
-            if path.starts_with("/static") {
-                // Serve static files for map preview
-                return Ok(assets(&path[1..]));
-            }
         }
     };
     Ok(not_found())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tiles::discover_tilesets;
+    use crate::utils::decode;
+    use hyper::body;
+    use serde_json::Value as JSONValue;
+    use std::path::PathBuf;
+
+    async fn setup(uri: &str) -> Response<Body> {
+        let request = Request::get(uri)
+            .header("host", "localhost:3000")
+            .body(Body::from(""))
+            .unwrap();
+
+        let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
+        get_service(request, tilesets).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn get_services() {
+        let response = setup("http://localhost:3000/services").await;
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn get_details() {
+        let response = setup("http://localhost:3000/services/geography-class-png").await;
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn get_preview_map() {
+        let response = setup("http://localhost:3000/services/geography-class-png/map").await;
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn get_existing_tile() {
+        let response =
+            setup("http://localhost:3000/services/geography-class-png/tiles/0/0/0.png").await;
+        assert_eq!(response.status(), 200);
+    }
+
+    #[tokio::test]
+    async fn get_non_existing_tile() {
+        // Geography Class PNG has no tiles beyond zoom level 1 and should return a blank image
+        let response =
+            setup("http://localhost:3000/services/geography-class-png/tiles/2/0/0.png").await;
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            body::to_bytes(response.into_body()).await.unwrap(),
+            get_blank_image()
+        );
+    }
+
+    #[tokio::test]
+    async fn get_existing_utfgrid_data() {
+        let response =
+            setup("http://localhost:3000/services/geography-class-png/tiles/0/0/0.json").await;
+        assert_eq!(response.status(), 200);
+        let data: JSONValue = serde_json::from_str(
+            &decode(
+                body::to_bytes(response.into_body()).await.unwrap().to_vec(),
+                DataFormat::GZIP,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_ne!(data.get("data"), None);
+        assert_ne!(data.get("grid"), None);
+        assert_ne!(data.get("keys"), None);
+    }
+
+    #[tokio::test]
+    async fn get_non_existing_utfgrid_data() {
+        // should return empty content with 204 status
+        let response =
+            setup("http://localhost:3000/services/geography-class-png/tiles/2/0/0.json").await;
+        assert_eq!(response.status(), 204);
+    }
 }

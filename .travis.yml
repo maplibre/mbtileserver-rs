@@ -37,5 +37,5 @@ script:
       cargo doc
 
 after_success:
-  - cargo coveralls
+  - cargo coveralls --exclude-pattern target
   - cargo doc-upload
