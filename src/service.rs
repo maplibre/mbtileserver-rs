@@ -59,6 +59,7 @@ pub fn tile_map() -> Response<Body> {
 pub async fn get_service(
     request: Request<Body>,
     tilesets: HashMap<String, TileMeta>,
+    disable_preview: bool,
 ) -> Result<Response<Body>, hyper::Error> {
     let path = request.uri().path();
     let scheme = match request.uri().scheme_str() {
@@ -150,20 +151,33 @@ pub async fn get_service(
                         .unwrap()); // TODO handle error
                 }
 
-                if segments[segments.len() - 1] == "map" {
-                    // Tileset map preview (/services/<tileset-path>/map)
-                    return Ok(tile_map());
-                }
-
                 // Tileset details (/services/<tileset-path>)
                 let tile_name = segments[1..].join("/");
                 let tile_meta = match tilesets.get(&tile_name) {
                     Some(tile_meta) => tile_meta.clone(),
                     None => {
+                        if segments[segments.len() - 1] == "map" {
+                            // Tileset map preview (/services/<tileset-path>/map)
+                            let tile_name = segments[1..segments.len() - 1].join("/");
+                            match tilesets.get(&tile_name) {
+                                Some(_) => {
+                                    if disable_preview {
+                                        return Ok(not_found());
+                                    }
+                                    return Ok(tile_map());
+                                }
+                                None => {
+                                    return Ok(bad_request(format!(
+                                        "Tileset does not exist: {}",
+                                        tile_name
+                                    )))
+                                }
+                            }
+                        }
                         return Ok(bad_request(format!(
                             "Tileset does not exist: {}",
                             tile_name
-                        )))
+                        )));
                     }
                 };
                 let query_string = match request.uri().query() {
@@ -174,7 +188,6 @@ pub async fn get_service(
                 let mut tile_meta_json = json!({
                     "name": tile_meta.name,
                     "version": tile_meta.version,
-                    "map": format!("{}/{}/{}", base_url, tile_name, "map"),
                     "tiles": vec![format!(
                         "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
                         base_url,
@@ -211,6 +224,9 @@ pub async fn get_service(
                     }
                     None => (),
                 };
+                if !disable_preview {
+                    tile_meta_json["map"] = json!(format!("{}/{}/{}", base_url, tile_name, "map"));
+                }
 
                 return Ok(Response::builder()
                     .header(header::CONTENT_TYPE, "application/json")
@@ -228,49 +244,62 @@ mod tests {
     use crate::tiles::discover_tilesets;
     use crate::utils::decode;
     use hyper::body;
+    use serde_json;
     use serde_json::Value as JSONValue;
     use std::path::PathBuf;
 
-    async fn setup(uri: &str) -> Response<Body> {
+    async fn setup(uri: &str, disable_preview: bool) -> Response<Body> {
         let request = Request::get(uri)
             .header("host", "localhost:3000")
             .body(Body::from(""))
             .unwrap();
 
         let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
-        get_service(request, tilesets).await.unwrap()
+        get_service(request, tilesets, disable_preview)
+            .await
+            .unwrap()
     }
 
     #[tokio::test]
     async fn get_services() {
-        let response = setup("http://localhost:3000/services").await;
+        let response = setup("http://localhost:3000/services", false).await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn get_details() {
-        let response = setup("http://localhost:3000/services/geography-class-png").await;
+        let response = setup("http://localhost:3000/services/geography-class-png", false).await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn get_preview_map() {
-        let response = setup("http://localhost:3000/services/geography-class-png/map").await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/map",
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn get_existing_tile() {
-        let response =
-            setup("http://localhost:3000/services/geography-class-png/tiles/0/0/0.png").await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/tiles/0/0/0.png",
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn get_non_existing_tile() {
         // Geography Class PNG has no tiles beyond zoom level 1 and should return a blank image
-        let response =
-            setup("http://localhost:3000/services/geography-class-png/tiles/2/0/0.png").await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/tiles/2/0/0.png",
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 200);
         assert_eq!(
             body::to_bytes(response.into_body()).await.unwrap(),
@@ -280,8 +309,11 @@ mod tests {
 
     #[tokio::test]
     async fn get_existing_utfgrid_data() {
-        let response =
-            setup("http://localhost:3000/services/geography-class-png/tiles/0/0/0.json").await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/tiles/0/0/0.json",
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 200);
         let data: JSONValue = serde_json::from_str(
             &decode(
@@ -299,8 +331,21 @@ mod tests {
     #[tokio::test]
     async fn get_non_existing_utfgrid_data() {
         // should return empty content with 204 status
-        let response =
-            setup("http://localhost:3000/services/geography-class-png/tiles/2/0/0.json").await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/tiles/2/0/0.json",
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 204);
+    }
+
+    #[tokio::test]
+    async fn disable_preview() {
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png/map",
+            true,
+        )
+        .await;
+        assert_eq!(response.status(), 404);
     }
 }

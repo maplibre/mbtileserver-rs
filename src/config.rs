@@ -9,6 +9,7 @@ use crate::errors::{Error, Result};
 pub struct Args {
     pub directory: PathBuf,
     pub port: u16,
+    pub disable_preview: bool,
 }
 
 pub fn parse() -> Result<Args> {
@@ -31,6 +32,11 @@ pub fn parse() -> Result<Args> {
                 .help("Port")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("disable_preview")
+                .long("disable-preview")
+                .help("Disable preview map"),
+        )
         .get_matches();
 
     let port = match matches.value_of("port").unwrap().parse::<u16>() {
@@ -48,5 +54,15 @@ pub fn parse() -> Result<Args> {
         Err(_) => return Err(Error::Config(String::from("Directory does not exists"))),
     };
 
-    Ok(Args { directory, port })
+    let disable_preview = if matches.occurrences_of("disable_preview") != 0 {
+        true
+    } else {
+        false
+    };
+
+    Ok(Args {
+        directory,
+        port,
+        disable_preview,
+    })
 }

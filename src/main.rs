@@ -7,18 +7,21 @@
 //! Run `mbtileserver --help` for a list and description of the available flags:
 //!
 //! ```
-//! MBTiles Server
+//! mbtileserver 0.1.4
+//! A simple mbtile server
 //!
 //! USAGE:
-//!     mbtileserver [OPTIONS]
+//!     mbtileserver [FLAGS] [OPTIONS]
 //!
 //! FLAGS:
-//!     -h, --help       Prints help information
-//!     -V, --version    Prints version information
+//!         --disable-preview    Disable preview map
+//!     -h, --help               Prints help information
+//!     -V, --version            Prints version information
 //!
 //! OPTIONS:
 //!     -d, --directory <directory>    Tiles directory [default: ./tiles]
 //!     -p, --port <port>              Port [default: 3000]
+//!
 //! ```
 //!
 //! Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.
@@ -73,11 +76,13 @@ async fn main() {
 
     let addr = ([0, 0, 0, 0], args.port).into();
 
+    let disable_preview = args.disable_preview;
+
     let make_service = make_service_fn(move |_conn| {
         let tilesets = tilesets.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                service::get_service(req, tilesets.clone())
+                service::get_service(req, tilesets.clone(), disable_preview)
             }))
         }
     });

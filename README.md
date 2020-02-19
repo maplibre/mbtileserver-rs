@@ -14,14 +14,16 @@ A simple Rust-based server for map tiles stored in mbtiles format.
 Run `mbtileserver --help` for a list and description of the available flags:
 
 ```
-MBTiles Server 
+mbtileserver 0.1.4
+A simple mbtile server
 
 USAGE:
-    mbtileserver [OPTIONS]
+    mbtileserver [FLAGS] [OPTIONS]
 
 FLAGS:
-    -h, --help       Prints help information
-    -V, --version    Prints version information
+        --disable-preview    Disable preview map
+    -h, --help               Prints help information
+    -V, --version            Prints version information
 
 OPTIONS:
     -d, --directory <directory>    Tiles directory [default: ./tiles]
