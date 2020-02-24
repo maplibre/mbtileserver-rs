@@ -7,7 +7,7 @@
 //! Run `mbtileserver --help` for a list and description of the available flags:
 //!
 //! ```
-//! mbtileserver 0.1.4
+//! mbtileserver 0.1.5
 //! A simple mbtile server
 //!
 //! USAGE:
@@ -20,6 +20,7 @@
 //!
 //! OPTIONS:
 //!     -d, --directory <directory>    Tiles directory [default: ./tiles]
+//!     -H, --header <header>...       Add custom header
 //!     -p, --port <port>              Port [default: 3000]
 //!
 //! ```
@@ -62,7 +63,7 @@ mod utils;
 async fn main() {
     pretty_env_logger::init();
 
-    let args = match config::parse() {
+    let args = match config::parse(config::get_app().get_matches()) {
         Ok(args) => args,
         Err(err) => {
             println!("{}", err);
@@ -76,13 +77,16 @@ async fn main() {
 
     let addr = ([0, 0, 0, 0], args.port).into();
 
+    let headers = args.headers;
+
     let disable_preview = args.disable_preview;
 
     let make_service = make_service_fn(move |_conn| {
         let tilesets = tilesets.clone();
+        let headers = headers.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                service::get_service(req, tilesets.clone(), disable_preview)
+                service::get_service(req, tilesets.clone(), headers.clone(), disable_preview)
             }))
         }
     });

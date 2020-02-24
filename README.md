@@ -14,7 +14,7 @@ A simple Rust-based server for map tiles stored in mbtiles format.
 Run `mbtileserver --help` for a list and description of the available flags:
 
 ```
-mbtileserver 0.1.4
+mbtileserver 0.1.5
 A simple mbtile server
 
 USAGE:
@@ -27,6 +27,7 @@ FLAGS:
 
 OPTIONS:
     -d, --directory <directory>    Tiles directory [default: ./tiles]
+    -H, --header <header>...       Add custom header
     -p, --port <port>              Port [default: 3000]
 ```
 

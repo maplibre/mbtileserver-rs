@@ -33,9 +33,7 @@ before_script:
 script:
   - |
       cargo build &&
-      cargo test &&
-      cargo doc
+      cargo test
 
 after_success:
   - cargo coveralls --exclude-pattern target
-  - cargo doc-upload

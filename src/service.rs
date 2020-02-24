@@ -59,6 +59,7 @@ pub fn tile_map() -> Response<Body> {
 pub async fn get_service(
     request: Request<Body>,
     tilesets: HashMap<String, TileMeta>,
+    headers: Vec<(String, String)>,
     disable_preview: bool,
 ) -> Result<Response<Body>, hyper::Error> {
     let path = request.uri().path();
@@ -87,6 +88,11 @@ pub async fn get_service(
                 None => "",
             };
 
+            let mut response = Response::builder();
+            for (k, v) in headers {
+                response = response.header(&k, &v);
+            }
+
             return match data_format {
                 "json" => match tile_meta.grid_format {
                     Some(grid_format) => match get_grid_data(
@@ -98,7 +104,7 @@ pub async fn get_service(
                     ) {
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
-                            Ok(Response::builder()
+                            Ok(response
                                 .header(header::CONTENT_TYPE, DataFormat::JSON.content_type())
                                 .header(header::CONTENT_ENCODING, "gzip")
                                 .body(Body::from(encode(&data)))
@@ -109,7 +115,7 @@ pub async fn get_service(
                     None => Ok(not_found()),
                 },
                 "pbf" => match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
-                    Ok(data) => Ok(Response::builder()
+                    Ok(data) => Ok(response
                         .header(header::CONTENT_TYPE, DataFormat::PBF.content_type())
                         .header(header::CONTENT_ENCODING, "gzip")
                         .body(Body::from(data))
@@ -122,7 +128,7 @@ pub async fn get_service(
                             Ok(data) => data,
                             Err(_) => get_blank_image(),
                         };
-                    Ok(Response::builder()
+                    Ok(response
                         .header(
                             header::CONTENT_TYPE,
                             DataFormat::new(data_format).content_type(),
@@ -255,7 +261,7 @@ mod tests {
             .unwrap();
 
         let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
-        get_service(request, tilesets, disable_preview)
+        get_service(request, tilesets, Vec::new(), disable_preview)
             .await
             .unwrap()
     }
