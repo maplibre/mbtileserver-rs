@@ -128,7 +128,7 @@ mod tests {
     fn test_valid_headers() {
         let args = parse(get_app().get_matches_from(vec![
             "mbtileserver",
-            "--header=cache-control:public,max-age=14400",
+            "--header=cache-control: public,max-age=14400",
             "--header=access-control-allow-origin: *",
         ]))
         .unwrap();
