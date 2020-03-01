@@ -3,14 +3,17 @@ use std::path::PathBuf;
 
 use clap::{crate_version, App, Arg, ArgMatches};
 
+use hyper::header::HeaderValue;
+
 use crate::errors::{Error, Result};
 
 #[derive(Clone)]
 pub struct Args {
     pub directory: PathBuf,
     pub port: u16,
-    pub disable_preview: bool,
+    pub allowed_hosts: Vec<HeaderValue>,
     pub headers: Vec<(String, String)>,
+    pub disable_preview: bool,
 }
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
@@ -31,6 +34,13 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .long("port")
                 .default_value("3000")
                 .help("Port")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("allowed_hosts")
+                .long("allowed-hosts")
+                .default_value("*")
+                .help("A comma-separated list of allowed hosts")
                 .takes_value(true),
         )
         .arg(
@@ -69,6 +79,13 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         }
     };
 
+    let allowed_hosts: Vec<HeaderValue> = matches
+        .value_of("allowed_hosts")
+        .unwrap()
+        .split(",")
+        .map(|host| HeaderValue::from_str(host.trim()).unwrap())
+        .collect();
+
     let mut headers = Vec::new();
     match matches.values_of("header") {
         Some(headers_iter) => {
@@ -95,8 +112,9 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
     Ok(Args {
         directory,
         port,
-        disable_preview,
+        allowed_hosts,
         headers,
+        disable_preview,
     })
 }
 

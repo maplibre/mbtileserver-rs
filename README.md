@@ -27,9 +27,10 @@ FLAGS:
     -V, --version            Prints version information
 
 OPTIONS:
-    -d, --directory <directory>    Tiles directory [default: ./tiles]
-    -H, --header <header>...       Add custom header
-    -p, --port <port>              Port [default: 3000]
+        --allowed-hosts <allowed_hosts>    A comma-separated list of allowed hosts [default: *]
+    -d, --directory <directory>            Tiles directory [default: ./tiles]
+    -H, --header <header>...               Add custom header
+    -p, --port <port>                      Port [default: 3000]
 ```
 
 Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.

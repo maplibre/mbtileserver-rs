@@ -1,43 +1,3 @@
-//! # rust-mbtileserver
-//!
-//! A simple Rust-based server for map tiles stored in mbtiles format.
-//!
-//! ## Usage
-//!
-//! Run `mbtileserver --help` for a list and description of the available flags:
-//!
-//! ```
-//! mbtileserver 0.1.5
-//! A simple mbtile server
-//!
-//! USAGE:
-//!     mbtileserver [FLAGS] [OPTIONS]
-//!
-//! FLAGS:
-//!         --disable-preview    Disable preview map
-//!     -h, --help               Prints help information
-//!     -V, --version            Prints version information
-//!
-//! OPTIONS:
-//!     -d, --directory <directory>    Tiles directory [default: ./tiles]
-//!     -H, --header <header>...       Add custom header
-//!     -p, --port <port>              Port [default: 3000]
-//!
-//! ```
-//!
-//! Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.
-//! The server starts on port 3000 by default. You can use a different port via `-p` flag.
-//!
-//! ### Endpoints
-//!
-//! | Endpoint                                                    | Description                                                                    |
-//! |-------------------------------------------------------------|--------------------------------------------------------------------------------|
-//! | /services                                                   | lists all discovered and valid mbtiles in the tiles directory                  |
-//! | /services/<path-to-tileset>                                 | shows tileset metadata                                                         |
-//! | /services/<path-to-tileset>/map                             | tileset preview                                                                |
-//! | /services/<path-to-tileset>/tiles/{z}/{x}/{y}.<tile-format> | returns tileset tile at the given x, y, and z                                  |
-//! | /services/<path-to-tileset>/tiles/{z}/{x}/{y}.json          | returns UTFGrid data at the given x, y, and z (only for tilesets with UTFGrid) |
-
 extern crate clap;
 extern crate flate2;
 extern crate hyper;
@@ -77,16 +37,24 @@ async fn main() {
 
     let addr = ([0, 0, 0, 0], args.port).into();
 
+    let allowed_hosts = args.allowed_hosts;
     let headers = args.headers;
 
     let disable_preview = args.disable_preview;
 
     let make_service = make_service_fn(move |_conn| {
         let tilesets = tilesets.clone();
+        let allowed_hosts = allowed_hosts.clone();
         let headers = headers.clone();
         async move {
             Ok::<_, hyper::Error>(service_fn(move |req| {
-                service::get_service(req, tilesets.clone(), headers.clone(), disable_preview)
+                service::get_service(
+                    req,
+                    tilesets.clone(),
+                    allowed_hosts.clone(),
+                    headers.clone(),
+                    disable_preview,
+                )
             }))
         }
     });

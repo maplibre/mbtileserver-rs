@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
-use hyper::{header, Body, Request, Response, StatusCode};
+use hyper::header::{HeaderValue, CONTENT_ENCODING, CONTENT_TYPE, HOST};
+use hyper::{Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
@@ -12,10 +13,13 @@ use crate::utils::{encode, get_blank_image, DataFormat};
 lazy_static! {
     static ref TILE_URL_RE: Regex =
         Regex::new(r"^/services/(?P<tile_path>.*)/tiles/(?P<z>\d+)/(?P<x>\d+)/(?P<y>\d+)\.(?P<format>[a-zA-Z]+)/?(\?(?P<query>.*))?").unwrap();
+
+    static ref ALL_HOSTS: HeaderValue = HeaderValue::from_static("*");
 }
 
 #[allow(dead_code)]
 static INTERNAL_SERVER_ERROR: &[u8] = b"Internal Server Error";
+static FORBIDDEN: &[u8] = b"Forbidden";
 static NOT_FOUND: &[u8] = b"Not Found";
 static NO_CONTENT: &[u8] = b"";
 
@@ -30,6 +34,13 @@ fn no_content() -> Response<Body> {
     Response::builder()
         .status(StatusCode::NO_CONTENT)
         .body(NO_CONTENT.into())
+        .unwrap()
+}
+
+fn forbidden() -> Response<Body> {
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .body(FORBIDDEN.into())
         .unwrap()
 }
 
@@ -59,9 +70,17 @@ pub fn tile_map() -> Response<Body> {
 pub async fn get_service(
     request: Request<Body>,
     tilesets: HashMap<String, TileMeta>,
+    allowed_hosts: Vec<HeaderValue>,
     headers: Vec<(String, String)>,
     disable_preview: bool,
 ) -> Result<Response<Body>, hyper::Error> {
+    let request_host = request.headers().get(HOST);
+    if !allowed_hosts.contains(&ALL_HOSTS)
+        && (request_host.is_none() || !allowed_hosts.contains(&request_host.unwrap()))
+    {
+        return Ok(forbidden());
+    }
+
     let path = request.uri().path();
     let scheme = match request.uri().scheme_str() {
         Some(scheme) => format!("{}://", scheme),
@@ -105,8 +124,8 @@ pub async fn get_service(
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
                             Ok(response
-                                .header(header::CONTENT_TYPE, DataFormat::JSON.content_type())
-                                .header(header::CONTENT_ENCODING, "gzip")
+                                .header(CONTENT_TYPE, DataFormat::JSON.content_type())
+                                .header(CONTENT_ENCODING, "gzip")
                                 .body(Body::from(encode(&data)))
                                 .unwrap())
                         }
@@ -116,8 +135,8 @@ pub async fn get_service(
                 },
                 "pbf" => match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
                     Ok(data) => Ok(response
-                        .header(header::CONTENT_TYPE, DataFormat::PBF.content_type())
-                        .header(header::CONTENT_ENCODING, "gzip")
+                        .header(CONTENT_TYPE, DataFormat::PBF.content_type())
+                        .header(CONTENT_ENCODING, "gzip")
                         .body(Body::from(data))
                         .unwrap()),
                     Err(_) => Ok(no_content()),
@@ -129,10 +148,7 @@ pub async fn get_service(
                             Err(_) => get_blank_image(),
                         };
                     Ok(response
-                        .header(
-                            header::CONTENT_TYPE,
-                            DataFormat::new(data_format).content_type(),
-                        )
+                        .header(CONTENT_TYPE, DataFormat::new(data_format).content_type())
                         .body(Body::from(data))
                         .unwrap())
                 }
@@ -152,7 +168,7 @@ pub async fn get_service(
                     }
                     let resp_json = serde_json::to_string(&tiles_summary).unwrap(); // TODO handle error
                     return Ok(Response::builder()
-                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(CONTENT_TYPE, "application/json")
                         .body(Body::from(resp_json))
                         .unwrap()); // TODO handle error
                 }
@@ -235,7 +251,7 @@ pub async fn get_service(
                 }
 
                 return Ok(Response::builder()
-                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(CONTENT_TYPE, "application/json")
                     .body(Body::from(serde_json::to_string(&tile_meta_json).unwrap()))
                     .unwrap()); // TODO handle error
             }
@@ -254,27 +270,56 @@ mod tests {
     use serde_json::Value as JSONValue;
     use std::path::PathBuf;
 
-    async fn setup(uri: &str, disable_preview: bool) -> Response<Body> {
+    async fn setup(
+        uri: &str,
+        allowed_hosts: Option<Vec<HeaderValue>>,
+        headers: Option<Vec<(String, String)>>,
+        disable_preview: bool,
+    ) -> Response<Body> {
         let request = Request::get(uri)
             .header("host", "localhost:3000")
             .body(Body::from(""))
             .unwrap();
 
         let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
-        get_service(request, tilesets, Vec::new(), disable_preview)
-            .await
-            .unwrap()
+        get_service(
+            request,
+            tilesets,
+            allowed_hosts.unwrap_or(vec![HeaderValue::from_str("*").unwrap()]),
+            headers.unwrap_or(vec![]),
+            disable_preview,
+        )
+        .await
+        .unwrap()
     }
 
     #[tokio::test]
     async fn get_services() {
-        let response = setup("http://localhost:3000/services", false).await;
+        let response = setup("http://localhost:3000/services", None, None, false).await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
+    async fn limit_allowed_hosts() {
+        let response = setup(
+            "http://localhost:3000/services",
+            Some(vec![HeaderValue::from_str("example.com").unwrap()]),
+            None,
+            false,
+        )
+        .await;
+        assert_eq!(response.status(), 403);
+    }
+
+    #[tokio::test]
     async fn get_details() {
-        let response = setup("http://localhost:3000/services/geography-class-png", false).await;
+        let response = setup(
+            "http://localhost:3000/services/geography-class-png",
+            None,
+            None,
+            false,
+        )
+        .await;
         assert_eq!(response.status(), 200);
     }
 
@@ -282,6 +327,8 @@ mod tests {
     async fn get_preview_map() {
         let response = setup(
             "http://localhost:3000/services/geography-class-png/map",
+            None,
+            None,
             false,
         )
         .await;
@@ -292,6 +339,8 @@ mod tests {
     async fn get_existing_tile() {
         let response = setup(
             "http://localhost:3000/services/geography-class-png/tiles/0/0/0.png",
+            None,
+            None,
             false,
         )
         .await;
@@ -303,6 +352,8 @@ mod tests {
         // Geography Class PNG has no tiles beyond zoom level 1 and should return a blank image
         let response = setup(
             "http://localhost:3000/services/geography-class-png/tiles/2/0/0.png",
+            None,
+            None,
             false,
         )
         .await;
@@ -317,6 +368,8 @@ mod tests {
     async fn get_existing_utfgrid_data() {
         let response = setup(
             "http://localhost:3000/services/geography-class-png/tiles/0/0/0.json",
+            None,
+            None,
             false,
         )
         .await;
@@ -339,6 +392,8 @@ mod tests {
         // should return empty content with 204 status
         let response = setup(
             "http://localhost:3000/services/geography-class-png/tiles/2/0/0.json",
+            None,
+            None,
             false,
         )
         .await;
@@ -349,6 +404,8 @@ mod tests {
     async fn disable_preview() {
         let response = setup(
             "http://localhost:3000/services/geography-class-png/map",
+            None,
+            None,
             true,
         )
         .await;
