@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "mbtileserver"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "flate2 1.0.13 (registry+https://github.com/rust-lang/crates.io-index)",

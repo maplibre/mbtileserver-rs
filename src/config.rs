@@ -3,15 +3,13 @@ use std::path::PathBuf;
 
 use clap::{crate_version, App, Arg, ArgMatches};
 
-use hyper::header::HeaderValue;
-
 use crate::errors::{Error, Result};
 
 #[derive(Clone)]
 pub struct Args {
     pub directory: PathBuf,
     pub port: u16,
-    pub allowed_hosts: Vec<HeaderValue>,
+    pub allowed_hosts: Vec<String>,
     pub headers: Vec<(String, String)>,
     pub disable_preview: bool,
 }
@@ -25,7 +23,7 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .short("d")
                 .long("directory")
                 .default_value("./tiles")
-                .help("Tiles directory")
+                .help("Tiles directory\n")
                 .takes_value(true),
         )
         .arg(
@@ -33,28 +31,29 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .short("p")
                 .long("port")
                 .default_value("3000")
-                .help("Port")
+                .help("Server port\n")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("allowed_hosts")
                 .long("allowed-hosts")
-                .default_value("*")
+                .default_value("localhost, 127.0.0.1, [::1]")
                 .help("A comma-separated list of allowed hosts")
+                .long_help("\"*\" matches all domains and \".<domain>\" matches all subdomains for the given domain\n")
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("header")
                 .short("H")
                 .long("header")
-                .help("Add custom header")
+                .help("Add custom header\n")
                 .multiple(true)
                 .takes_value(true),
         )
         .arg(
             Arg::with_name("disable_preview")
                 .long("disable-preview")
-                .help("Disable preview map"),
+                .help("Disable preview map\n"),
         )
 }
 
@@ -79,11 +78,11 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         }
     };
 
-    let allowed_hosts: Vec<HeaderValue> = matches
+    let allowed_hosts: Vec<String> = matches
         .value_of("allowed_hosts")
         .unwrap()
-        .split(",")
-        .map(|host| HeaderValue::from_str(host.trim()).unwrap())
+        .split(',')
+        .map(|host| String::from(host.trim()))
         .collect();
 
     let mut headers = Vec::new();

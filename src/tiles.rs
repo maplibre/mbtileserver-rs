@@ -85,7 +85,7 @@ pub fn get_data_format_via_query(
     Ok(data_format)
 }
 
-pub fn get_tile_details<'a>(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
+pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
     let manager = SqliteConnectionManager::file(path).with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY);
     let connection_pool = match r2d2::Pool::new(manager) {
         Ok(connection_pool) => connection_pool,
