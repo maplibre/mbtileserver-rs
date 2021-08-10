@@ -2,7 +2,8 @@ name: Check formats and run tests
 
 on:
   push:
-    - develop
+    branches:
+      - develop
 
 jobs:
   build:
