@@ -1,4 +1,4 @@
-FROM rust:1.41
+FROM rust:1.54
 
 WORKDIR /usr/src/mbtileserver
 COPY . .

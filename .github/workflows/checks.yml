@@ -1,0 +1,15 @@
+name: Check formats and run tests
+
+on:
+  push:
+    - develop
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v1
+      - uses: icepuma/rust-action@1.54.0
+        with:
+          args: cargo fmt -- --check && cargo clippy -- -Dwarnings && cargo test

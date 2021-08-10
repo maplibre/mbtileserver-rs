@@ -283,7 +283,7 @@ mod tests {
     use super::*;
     use crate::tiles::discover_tilesets;
     use crate::utils::decode;
-    use hyper::{body};
+    use hyper::body;
     use serde_json;
     use serde_json::Value as JSONValue;
     use std::path::PathBuf;

@@ -4,7 +4,7 @@ use std::fs::read_dir;
 use std::path::PathBuf;
 
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, OpenFlags, NO_PARAMS};
+use rusqlite::{params, OpenFlags};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JSONValue;
@@ -78,7 +78,7 @@ pub fn get_data_format_via_query(
         Err(err) => return Err(Error::DBConnection(err)),
     };
     let data_format: DataFormat = statement
-        .query_row(NO_PARAMS, |row| {
+        .query_row([], |row| {
             Ok(get_data_format(&row.get::<_, Vec<u8>>(0).unwrap()))
         })
         .unwrap_or(DataFormat::UNKNOWN);
@@ -100,7 +100,7 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
         Ok(s) => s,
         Err(err) => return Err(Error::DBConnection(err)),
     };
-    match statement.query_row(NO_PARAMS, |row| Ok(row.get::<_, i8>(0).unwrap_or(0))) {
+    match statement.query_row([], |row| Ok(row.get::<_, i8>(0).unwrap_or(0))) {
         Ok(count) => {
             if count < 2 {
                 return Err(Error::MissingTable(String::from(tile_name)));
@@ -143,7 +143,7 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
     let mut statement = connection
         .prepare(r#"SELECT name, value FROM metadata WHERE value IS NOT ''"#)
         .unwrap();
-    let mut metadata_rows = statement.query(NO_PARAMS).unwrap();
+    let mut metadata_rows = statement.query([]).unwrap();
 
     while let Some(row) = metadata_rows.next().unwrap() {
         let label: String = row.get(0).unwrap();
@@ -202,7 +202,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
 fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat> {
     let mut statement = connection.prepare(r#"SELECT count(*) FROM sqlite_master WHERE name IN ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')"#).unwrap();
     let count: u8 = statement
-        .query_row(NO_PARAMS, |row| Ok(row.get(0).unwrap()))
+        .query_row([], |row| Ok(row.get(0).unwrap()))
         .unwrap();
     if count == 5 {
         match get_data_format_via_query(&tile_name, connection, "grid") {
