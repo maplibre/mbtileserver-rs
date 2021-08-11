@@ -41,7 +41,7 @@ jobs:
       - name: Upload to coveralls.io
         uses: coverallsapp/github-action@master
         with:
-          token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{secrets.GITHUB_TOKEN}}
 
   fmt:
     name: Rustfmt
