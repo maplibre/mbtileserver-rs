@@ -1,4 +1,4 @@
-name: Check formats and run tests
+name: Check formats and run tests and coverage
 
 on:
   push:
@@ -6,11 +6,71 @@ on:
       - develop
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
-
+    strategy:
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
     steps:
-      - uses: actions/checkout@v1
-      - uses: icepuma/rust-action@1.54.0
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
         with:
-          args: cargo fmt -- --check && cargo clippy -- -Dwarnings && cargo test
+          profile: minimal
+          toolchain: ${{ matrix.rust }}
+          override: true
+          components: rustfmt, clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: test
+  
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: '0.18.0'
+          args: '-- --test-threads 1'
+      - name: Upload to coveralls.io
+        uses: coverallsapp/github-action@master
+        with:
+          token: ${{secrets.GITHUB_TOKEN}}
+
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add rustfmt
+      - uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - run: rustup component add clippy
+      - uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: -- -D warnings
