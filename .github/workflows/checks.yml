@@ -37,7 +37,7 @@ jobs:
       - uses: actions-rs/tarpaulin@v0.1
         with:
           version: '0.18.0'
-          args: '-- --test-threads 1'
+          args: '-- --test-threads 1 -o Lcov --output-dir .coverage'
       - name: Upload to coveralls.io
         uses: coverallsapp/github-action@master
         with:

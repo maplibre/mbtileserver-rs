@@ -4,7 +4,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/mbtileserver.svg)](https://crates.io/crates/mbtileserver)
 [![Build Status](https://travis-ci.com/ka7eh/rust-mbtileserver.svg?branch=master)](https://travis-ci.com/ka7eh/rust-mbtileserver)
-[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=master)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=main)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=main)
 
 _Tested with rust 1.54_
 
