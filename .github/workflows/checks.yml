@@ -37,12 +37,13 @@ jobs:
       - uses: actions-rs/tarpaulin@v0.1
         with:
           version: '0.18.0'
-          args: '-- --test-threads 1 --output-dir .coverage'
+          args: '-- --test-threads 1'
           out-type: 'Lcov'
       - name: Upload to coveralls.io
         uses: coverallsapp/github-action@master
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
+          path-to-lcov: './lcov.info'
 
   fmt:
     name: Rustfmt
