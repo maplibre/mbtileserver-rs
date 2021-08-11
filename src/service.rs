@@ -65,7 +65,7 @@ pub fn tile_map() -> Response<Body> {
     Response::new(body)
 }
 
-fn is_host_valid(host: Option<&HeaderValue>, allowed_hosts: &Vec<String>) -> bool {
+fn is_host_valid(host: Option<&HeaderValue>, allowed_hosts: &[String]) -> bool {
     if host.is_none() {
         return false;
     }
@@ -75,7 +75,7 @@ fn is_host_valid(host: Option<&HeaderValue>, allowed_hosts: &Vec<String>) -> boo
         if pattern == "*" || pattern == host {
             return true;
         }
-        if pattern.starts_with(".") {
+        if pattern.starts_with('.') {
             let mut pattern = pattern.clone();
             let pattern = pattern.split_off(1);
             if host.ends_with(&pattern) {
@@ -142,7 +142,7 @@ pub async fn get_service(
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
                             Ok(response
-                                .header(CONTENT_TYPE, DataFormat::JSON.content_type())
+                                .header(CONTENT_TYPE, DataFormat::Json.content_type())
                                 .header(CONTENT_ENCODING, "gzip")
                                 .body(Body::from(encode(&data)))
                                 .unwrap())
@@ -153,7 +153,7 @@ pub async fn get_service(
                 },
                 "pbf" => match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
                     Ok(data) => Ok(response
-                        .header(CONTENT_TYPE, DataFormat::PBF.content_type())
+                        .header(CONTENT_TYPE, DataFormat::Pbf.content_type())
                         .header(CONTENT_ENCODING, "gzip")
                         .body(Body::from(data))
                         .unwrap()),
@@ -239,13 +239,10 @@ pub async fn get_service(
                     "scheme": tile_meta.scheme,
                     "id": tile_meta.id,
                     "format": tile_meta.tile_format,
-                    "grids": match tile_meta.grid_format {
-                        Some(_) => Some(vec![format!(
-                            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
-                            base_url, tile_name, query_string
-                        )]),
-                        None => None,
-                    },
+                    "grids": tile_meta.grid_format.map(|_| vec![format!(
+                        "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
+                        base_url, tile_name, query_string
+                    )]),
                     "bounds": tile_meta.bounds,
                     "center": tile_meta.center,
                     "minzoom": tile_meta.minzoom,
@@ -256,14 +253,11 @@ pub async fn get_service(
                     "legend": tile_meta.legend,
                     "template": tile_meta.template,
                 });
-                match tile_meta.json {
-                    Some(json_data) => {
-                        for (k, v) in json_data.as_object().unwrap() {
-                            tile_meta_json[k] = v.clone();
-                        }
+                if let Some(json_data) = tile_meta.json {
+                    for (k, v) in json_data.as_object().unwrap() {
+                        tile_meta_json[k] = v.clone();
                     }
-                    None => (),
-                };
+                }
                 if !disable_preview {
                     tile_meta_json["map"] = json!(format!("{}/{}/{}", base_url, tile_name, "map"));
                 }
@@ -454,7 +448,7 @@ mod tests {
         let data: JSONValue = serde_json::from_str(
             &decode(
                 body::to_bytes(response.into_body()).await.unwrap().to_vec(),
-                DataFormat::GZIP,
+                DataFormat::Gzip,
             )
             .unwrap(),
         )

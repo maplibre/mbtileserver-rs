@@ -86,25 +86,22 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         .collect();
 
     let mut headers = Vec::new();
-    match matches.values_of("header") {
-        Some(headers_iter) => {
-            for header in headers_iter {
-                let kv: Vec<&str> = header.split(":").collect();
-                if kv.len() == 2 {
-                    let k = kv[0].trim();
-                    let v = kv[1].trim();
-                    if k.len() > 0 && v.len() > 0 {
-                        headers.push((String::from(k), String::from(v)))
-                    } else {
-                        println!("Invalid header: {}", header);
-                    }
+    if let Some(headers_iter) = matches.values_of("header") {
+        for header in headers_iter {
+            let kv: Vec<&str> = header.split(':').collect();
+            if kv.len() == 2 {
+                let k = kv[0].trim();
+                let v = kv[1].trim();
+                if !k.is_empty() && !v.is_empty() {
+                    headers.push((String::from(k), String::from(v)))
                 } else {
                     println!("Invalid header: {}", header);
                 }
+            } else {
+                println!("Invalid header: {}", header);
             }
         }
-        None => (),
-    };
+    }
 
     let disable_preview = matches.occurrences_of("disable_preview") != 0;
 
