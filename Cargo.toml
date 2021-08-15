@@ -1,9 +1,10 @@
 [package]
 name = "mbtileserver"
 description = "A Rust-based mbtiles server"
+homepage = "https://github.com/ka7eh/rust-mbtileserver"
 repository = "https://github.com/ka7eh/rust-mbtileserver"
-version = "0.1.6"
-authors = ["ka7eh <kaveh.k.a@gmail.com>"]
+version = "0.1.7"
+authors = ["Kaveh Karimi <ka7eh@pm.me>"]
 readme = "README.md"
 edition = "2018"
 license = "ISC"
@@ -16,23 +17,23 @@ include = [
 ]
 
 [badges]
-travis-ci = { repository = "ka7eh/rust-mbtileserver" }
 coveralls = { repository = "ka7eh/rust-mbtileserver" }
 
 [dependencies]
 clap = "2.33"
 flate2 = "1.0"
-hyper = "0.13"
+hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
 lazy_static = "1.4"
-libsqlite3-sys = "0.17"
+libsqlite3-sys = "0.22"
+log = "0.4"
 pretty_env_logger = "0.4"
 r2d2 = "0.8"
-r2d2_sqlite = "0.14"
+r2d2_sqlite = "0.18"
 regex = "1.3"
-rusqlite = "0.21"
+rusqlite = "0.25"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tokio = { version = "0.2", features = ["full"] }
+tokio = { version = "1.6", features = ["full"] }
 
 [dev-dependencies]
 tempdir = "0.3"

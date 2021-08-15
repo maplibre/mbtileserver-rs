@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::read_dir;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, OpenFlags, NO_PARAMS};
+use rusqlite::{params, OpenFlags};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JSONValue;
@@ -78,14 +78,14 @@ pub fn get_data_format_via_query(
         Err(err) => return Err(Error::DBConnection(err)),
     };
     let data_format: DataFormat = statement
-        .query_row(NO_PARAMS, |row| {
+        .query_row([], |row| {
             Ok(get_data_format(&row.get::<_, Vec<u8>>(0).unwrap()))
         })
-        .unwrap_or(DataFormat::UNKNOWN);
+        .unwrap_or(DataFormat::Unknown);
     Ok(data_format)
 }
 
-pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
+pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
     let manager = SqliteConnectionManager::file(path).with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY);
     let connection_pool = match r2d2::Pool::new(manager) {
         Ok(connection_pool) => connection_pool,
@@ -100,7 +100,7 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
         Ok(s) => s,
         Err(err) => return Err(Error::DBConnection(err)),
     };
-    match statement.query_row(NO_PARAMS, |row| Ok(row.get::<_, i8>(0).unwrap_or(0))) {
+    match statement.query_row([], |row| Ok(row.get::<_, i8>(0).unwrap_or(0))) {
         Ok(count) => {
             if count < 2 {
                 return Err(Error::MissingTable(String::from(tile_name)));
@@ -109,10 +109,10 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
         Err(err) => return Err(Error::DBConnection(err)),
     };
 
-    let tile_format = match get_data_format_via_query(&tile_name, &connection, "tile") {
+    let tile_format = match get_data_format_via_query(tile_name, &connection, "tile") {
         Ok(tile_format) => match tile_format {
-            DataFormat::UNKNOWN => return Err(Error::UnknownTileFormat(String::from(tile_name))),
-            DataFormat::GZIP => DataFormat::PBF, // GZIP masks PBF format too
+            DataFormat::Unknown => return Err(Error::UnknownTileFormat(String::from(tile_name))),
+            DataFormat::Gzip => DataFormat::Pbf, // GZIP masks PBF format too
             _ => tile_format,
         },
         Err(err) => return Err(err),
@@ -143,7 +143,7 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
     let mut statement = connection
         .prepare(r#"SELECT name, value FROM metadata WHERE value IS NOT ''"#)
         .unwrap();
-    let mut metadata_rows = statement.query(NO_PARAMS).unwrap();
+    let mut metadata_rows = statement.query([]).unwrap();
 
     while let Some(row) = metadata_rows.next().unwrap() {
         let label: String = row.get(0).unwrap();
@@ -152,10 +152,10 @@ pub fn get_tile_details(path: &PathBuf, tile_name: &str) -> Result<TileMeta> {
             "name" => metadata.name = Some(value),
             "version" => metadata.version = Some(value),
             "bounds" => {
-                metadata.bounds = Some(value.split(",").filter_map(|s| s.parse().ok()).collect())
+                metadata.bounds = Some(value.split(',').filter_map(|s| s.parse().ok()).collect())
             }
             "center" => {
-                metadata.center = Some(value.split(",").filter_map(|s| s.parse().ok()).collect())
+                metadata.center = Some(value.split(',').filter_map(|s| s.parse().ok()).collect())
             }
             "minzoom" => metadata.minzoom = Some(value.parse().unwrap()),
             "maxzoom" => metadata.maxzoom = Some(value.parse().unwrap()),
@@ -181,7 +181,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             let dir_name = p.file_stem().unwrap().to_str().unwrap();
             let mut parent_dir_cloned = parent_dir.clone();
             parent_dir_cloned.push_str(dir_name);
-            parent_dir_cloned.push_str("/");
+            parent_dir_cloned.push('/');
             tiles.extend(discover_tilesets(parent_dir_cloned, p));
         } else if p.extension().and_then(OsStr::to_str) == Some("mbtiles") {
             let file_name = p.file_stem().and_then(OsStr::to_str).unwrap();
@@ -190,7 +190,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             match get_tile_details(&p, file_name) {
                 Ok(tile_meta) => tiles.insert(parent_dir_cloned, tile_meta),
                 Err(err) => {
-                    println!("{}", err);
+                    warn!("{}", err);
                     None
                 }
             };
@@ -202,13 +202,13 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
 fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat> {
     let mut statement = connection.prepare(r#"SELECT count(*) FROM sqlite_master WHERE name IN ('grids', 'grid_data', 'grid_utfgrid', 'keymap', 'grid_key')"#).unwrap();
     let count: u8 = statement
-        .query_row(NO_PARAMS, |row| Ok(row.get(0).unwrap()))
+        .query_row([], |row| Ok(row.get(0).unwrap()))
         .unwrap();
     if count == 5 {
-        match get_data_format_via_query(&tile_name, connection, "grid") {
+        match get_data_format_via_query(tile_name, connection, "grid") {
             Ok(grid_format) => return Some(grid_format),
             Err(err) => {
-                println!("{}", err);
+                warn!("{}", err);
                 return None;
             }
         };
@@ -266,9 +266,9 @@ pub fn get_grid_data(
         })
         .unwrap();
     for gd in grid_data_iter {
-        let (k, v) = gd.unwrap();
-        let v: JSONValue = serde_json::from_str(&v).unwrap();
-        grid_data.data.insert(k, v);
+        let (key, value) = gd.unwrap();
+        let value: JSONValue = serde_json::from_str(&value).unwrap();
+        grid_data.data.insert(key, value);
     }
 
     Ok(grid_data)
@@ -321,7 +321,7 @@ mod tests {
             vec![-180.0, -85.0511, 180.0, 85.0511]
         );
         assert_eq!(tileset_details.center.unwrap(), vec![0.0, 20.0, 0.0]);
-        assert_eq!(tileset_details.tile_format, DataFormat::PNG);
+        assert_eq!(tileset_details.tile_format, DataFormat::Png);
 
         let tileset_details = get_tile_details(
             &PathBuf::from("./tiles/world_cities.mbtiles"),
@@ -344,6 +344,6 @@ mod tests {
             tileset_details.center.unwrap(),
             vec![-75.937500, 38.788894, 6.0]
         );
-        assert_eq!(tileset_details.tile_format, DataFormat::PBF);
+        assert_eq!(tileset_details.tile_format, DataFormat::Pbf);
     }
 }

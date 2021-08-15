@@ -9,7 +9,7 @@ export default {
 		file: 'dist/core.min.js'
 	},
 	plugins: [
-        css({ output: 'dist/core.min.css' }),
+        css({ output: 'core.min.css' }),
         resolve(),
         commonjs(),
 		terser()

@@ -3,10 +3,9 @@
 # rust-mbtileserver
 
 [![Crates.io](https://img.shields.io/crates/v/mbtileserver.svg)](https://crates.io/crates/mbtileserver)
-[![Build Status](https://travis-ci.com/ka7eh/rust-mbtileserver.svg?branch=master)](https://travis-ci.com/ka7eh/rust-mbtileserver)
-[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=master)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=master)
+[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=develop)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=develop)
 
-_Tested with rust 1.41_
+_Tested with rust 1.54_
 
 A simple Rust-based server for map tiles stored in mbtiles format.
 
@@ -15,7 +14,7 @@ A simple Rust-based server for map tiles stored in mbtiles format.
 Run `mbtileserver --help` for a list and description of the available flags:
 
 ```
-mbtileserver 0.1.6
+mbtileserver 0.1.7
 A simple mbtile server
 
 USAGE:
@@ -47,6 +46,8 @@ OPTIONS:
 
 Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.
 The server starts on port 3000 by default. You can use a different port via `-p` flag.
+
+You can adjust the log level by setting `RUST_LOG` environment variable. Possbile values are `trace`, `debug`, `info`, `warn`, `error`.
 
 ### Endpoints
 

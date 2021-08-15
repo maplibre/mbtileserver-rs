@@ -1,13 +1,15 @@
-use std::fs::read_dir;
+use std::collections::HashMap;
+use std::env;
 use std::path::PathBuf;
 
 use clap::{crate_version, App, Arg, ArgMatches};
 
 use crate::errors::{Error, Result};
+use crate::tiles;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Args {
-    pub directory: PathBuf,
+    pub tilesets: HashMap<String, tiles::TileMeta>,
     pub port: u16,
     pub allowed_hosts: Vec<String>,
     pub headers: Vec<(String, String)>,
@@ -67,15 +69,17 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         }
     };
 
-    let directory = PathBuf::from(matches.value_of("directory").unwrap());
-    match read_dir(directory.clone()) {
-        Ok(_) => (),
-        Err(_) => {
+    let tilesets = if let Some(directory_str) = matches.value_of("directory") {
+        let directory = PathBuf::from(directory_str);
+        if !directory.is_dir() {
             return Err(Error::Config(format!(
                 "Directory does not exists: {}",
-                matches.value_of("directory").unwrap()
-            )))
+                directory_str
+            )));
         }
+        tiles::discover_tilesets(String::new(), directory)
+    } else {
+        return Err(Error::Config("Invalid value for directory".to_string()));
     };
 
     let allowed_hosts: Vec<String> = matches
@@ -86,30 +90,27 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         .collect();
 
     let mut headers = Vec::new();
-    match matches.values_of("header") {
-        Some(headers_iter) => {
-            for header in headers_iter {
-                let kv: Vec<&str> = header.split(":").collect();
-                if kv.len() == 2 {
-                    let k = kv[0].trim();
-                    let v = kv[1].trim();
-                    if k.len() > 0 && v.len() > 0 {
-                        headers.push((String::from(k), String::from(v)))
-                    } else {
-                        println!("Invalid header: {}", header);
-                    }
+    if let Some(headers_iter) = matches.values_of("header") {
+        for header in headers_iter {
+            let kv: Vec<&str> = header.split(':').collect();
+            if kv.len() == 2 {
+                let k = kv[0].trim();
+                let v = kv[1].trim();
+                if !k.is_empty() && !v.is_empty() {
+                    headers.push((String::from(k), String::from(v)))
                 } else {
-                    println!("Invalid header: {}", header);
+                    warn!("Invalid header: {}", header);
                 }
+            } else {
+                warn!("Invalid header: {}", header);
             }
         }
-        None => (),
-    };
+    }
 
     let disable_preview = matches.occurrences_of("disable_preview") != 0;
 
     Ok(Args {
-        directory,
+        tilesets,
         port,
         allowed_hosts,
         headers,
@@ -121,12 +122,6 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
 mod tests {
     use super::*;
     use tempdir::TempDir;
-
-    #[test]
-    fn test_default_directory() {
-        let args = parse(get_app().get_matches_from(vec!["mbtileserver"])).unwrap();
-        assert_eq!(args.directory, PathBuf::from("./tiles"));
-    }
 
     #[test]
     fn test_missing_directory() {

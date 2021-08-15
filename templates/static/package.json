@@ -14,15 +14,15 @@
   "author": "ka7eh",
   "license": "ISC",
   "devDependencies": {
-    "@rollup/plugin-commonjs": "^11.0.2",
-    "@rollup/plugin-node-resolve": "^7.1.1",
-    "rollup": "^1.32.0",
-    "rollup-plugin-css-only": "^2.0.0",
-    "rollup-plugin-terser": "^5.2.0"
+    "@rollup/plugin-commonjs": "^20.0.0",
+    "@rollup/plugin-node-resolve": "^13.0.4",
+    "rollup": "^2.56.2",
+    "rollup-plugin-css-only": "^3.1.0",
+    "rollup-plugin-terser": "^7.0.2"
   },
   "dependencies": {
-    "d3-fetch": "^1.1.2",
-    "ol": "^6.2.1",
-    "ol-mapbox-style": "^6.0.1"
+    "d3-fetch": "^3.0.1",
+    "ol": "^6.6.1",
+    "ol-mapbox-style": "^6.4.1"
   }
 }

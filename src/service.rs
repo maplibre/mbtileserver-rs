@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use hyper::header::{HeaderValue, CONTENT_ENCODING, CONTENT_TYPE, HOST};
+use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
 use serde_json::json;
 
+use crate::errors::Result;
 use crate::tiles::{get_grid_data, get_tile_data, TileMeta, TileSummaryJSON};
 use crate::utils::{encode, get_blank_image, DataFormat};
 
@@ -65,17 +66,30 @@ pub fn tile_map() -> Response<Body> {
     Response::new(body)
 }
 
-fn is_host_valid(host: Option<&HeaderValue>, allowed_hosts: &Vec<String>) -> bool {
+fn get_host(req: &Request<Body>) -> Option<&str> {
+    let host = req.uri().host();
+    if host.is_some() {
+        return host;
+    }
+
+    if let Some(host) = req.headers().get(HOST) {
+        return Some(host.to_str().unwrap());
+    }
+
+    None
+}
+
+fn is_host_valid(host: &Option<&str>, allowed_hosts: &[String]) -> bool {
     if host.is_none() {
         return false;
     }
 
-    let host = host.unwrap().to_str().unwrap().split(':').next().unwrap();
+    let host = host.unwrap().split(':').next().unwrap();
     for pattern in allowed_hosts.iter() {
         if pattern == "*" || pattern == host {
             return true;
         }
-        if pattern.starts_with(".") {
+        if pattern.starts_with('.') {
             let mut pattern = pattern.clone();
             let pattern = pattern.split_off(1);
             if host.ends_with(&pattern) {
@@ -93,22 +107,21 @@ pub async fn get_service(
     allowed_hosts: Vec<String>,
     headers: Vec<(String, String)>,
     disable_preview: bool,
-) -> Result<Response<Body>, hyper::Error> {
-    if !is_host_valid(request.headers().get(HOST), &allowed_hosts) {
+) -> Result<Response<Body>> {
+    let host = get_host(&request);
+
+    if !is_host_valid(&host, &allowed_hosts) {
         return Ok(forbidden());
     };
 
+    let host = host.unwrap();
     let uri = request.uri();
     let path = uri.path();
     let scheme = match uri.scheme_str() {
         Some(scheme) => format!("{}://", scheme),
         None => String::from("http://"),
     };
-    let base_url = format!(
-        "{}{}/services",
-        scheme,
-        request.headers()["host"].to_str().unwrap()
-    );
+    let base_url = format!("{}{}/services", scheme, host);
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
@@ -142,7 +155,7 @@ pub async fn get_service(
                         Ok(data) => {
                             let data = serde_json::to_vec(&data).unwrap();
                             Ok(response
-                                .header(CONTENT_TYPE, DataFormat::JSON.content_type())
+                                .header(CONTENT_TYPE, DataFormat::Json.content_type())
                                 .header(CONTENT_ENCODING, "gzip")
                                 .body(Body::from(encode(&data)))
                                 .unwrap())
@@ -153,7 +166,7 @@ pub async fn get_service(
                 },
                 "pbf" => match get_tile_data(&tile_meta.connection_pool.get().unwrap(), z, x, y) {
                     Ok(data) => Ok(response
-                        .header(CONTENT_TYPE, DataFormat::PBF.content_type())
+                        .header(CONTENT_TYPE, DataFormat::Pbf.content_type())
                         .header(CONTENT_ENCODING, "gzip")
                         .body(Body::from(data))
                         .unwrap()),
@@ -239,13 +252,10 @@ pub async fn get_service(
                     "scheme": tile_meta.scheme,
                     "id": tile_meta.id,
                     "format": tile_meta.tile_format,
-                    "grids": match tile_meta.grid_format {
-                        Some(_) => Some(vec![format!(
-                            "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
-                            base_url, tile_name, query_string
-                        )]),
-                        None => None,
-                    },
+                    "grids": tile_meta.grid_format.map(|_| vec![format!(
+                        "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
+                        base_url, tile_name, query_string
+                    )]),
                     "bounds": tile_meta.bounds,
                     "center": tile_meta.center,
                     "minzoom": tile_meta.minzoom,
@@ -256,14 +266,11 @@ pub async fn get_service(
                     "legend": tile_meta.legend,
                     "template": tile_meta.template,
                 });
-                match tile_meta.json {
-                    Some(json_data) => {
-                        for (k, v) in json_data.as_object().unwrap() {
-                            tile_meta_json[k] = v.clone();
-                        }
+                if let Some(json_data) = tile_meta.json {
+                    for (k, v) in json_data.as_object().unwrap() {
+                        tile_meta_json[k] = v.clone();
                     }
-                    None => (),
-                };
+                }
                 if !disable_preview {
                     tile_meta_json["map"] = json!(format!("{}/{}/{}", base_url, tile_name, "map"));
                 }
@@ -283,7 +290,7 @@ mod tests {
     use super::*;
     use crate::tiles::discover_tilesets;
     use crate::utils::decode;
-    use hyper::{body};
+    use hyper::body;
     use serde_json;
     use serde_json::Value as JSONValue;
     use std::path::PathBuf;
@@ -295,8 +302,8 @@ mod tests {
         headers: Option<Vec<(String, String)>>,
         disable_preview: bool,
     ) -> Response<Body> {
-        let request = Request::get(path)
-            .header("host", host)
+        let request = Request::builder()
+            .uri(format!("{}{}", host, path))
             .body(Body::from(""))
             .unwrap();
 
@@ -314,14 +321,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_services() {
-        let response = setup("localhost", "/services", None, None, false).await;
+        let response = setup("http://localhost", "/services", None, None, false).await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn forbidden_domain() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -334,7 +341,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_all_domains() {
         let response = setup(
-            "example.com",
+            "http://example.com",
             "/services",
             Some(vec![String::from("*")]),
             None,
@@ -347,7 +354,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_domain() {
         let response = setup(
-            "example.com",
+            "http://example.com",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -360,7 +367,7 @@ mod tests {
     #[tokio::test]
     async fn forbidden_subdomain() {
         let response = setup(
-            "test.example.com",
+            "http://test.example.com",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -373,7 +380,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_subdomain() {
         let response = setup(
-            "test.example.com",
+            "http://test.example.com",
             "/services",
             Some(vec![String::from(".example.com")]),
             None,
@@ -386,7 +393,7 @@ mod tests {
     #[tokio::test]
     async fn get_details() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png",
             None,
             None,
@@ -399,7 +406,7 @@ mod tests {
     #[tokio::test]
     async fn get_preview_map() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/map",
             None,
             None,
@@ -412,7 +419,7 @@ mod tests {
     #[tokio::test]
     async fn get_existing_tile() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/0/0/0.png",
             None,
             None,
@@ -426,7 +433,7 @@ mod tests {
     async fn get_non_existing_tile() {
         // Geography Class PNG has no tiles beyond zoom level 1 and should return a blank image
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/2/0/0.png",
             None,
             None,
@@ -443,7 +450,7 @@ mod tests {
     #[tokio::test]
     async fn get_existing_utfgrid_data() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/0/0/0.json",
             None,
             None,
@@ -454,7 +461,7 @@ mod tests {
         let data: JSONValue = serde_json::from_str(
             &decode(
                 body::to_bytes(response.into_body()).await.unwrap().to_vec(),
-                DataFormat::GZIP,
+                DataFormat::Gzip,
             )
             .unwrap(),
         )
@@ -468,7 +475,7 @@ mod tests {
     async fn get_non_existing_utfgrid_data() {
         // should return empty content with 204 status
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/2/0/0.json",
             None,
             None,
@@ -481,7 +488,7 @@ mod tests {
     #[tokio::test]
     async fn disable_preview() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/map",
             None,
             None,
