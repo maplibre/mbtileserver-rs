@@ -1,4 +1,4 @@
-name: Check formats and run tests and coverage
+name: Lint, test, and publish
 
 on:
   push:
@@ -80,7 +80,7 @@ jobs:
           args: -- -D warnings
   
   publish:
-    name: Publish to creates.io
+    name: Publish to crates.io
     runs-on: ubuntu-latest
     if: github.event_name == 'release'
     steps:
