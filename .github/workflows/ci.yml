@@ -8,8 +8,9 @@ on:
     types: [published]
 
 jobs:
-  test:
+  tests:
     runs-on: ubuntu-latest
+    if: github.event_name != 'release'
     strategy:
       matrix:
         rust:
@@ -28,15 +29,17 @@ jobs:
         with:
           command: test
   
-  coverage:
+  coverage_and_publish:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
+          profile: minimal
           toolchain: stable
           override: true
-      - uses: actions-rs/tarpaulin@v0.1
+      - name: Generate coverage info
+        uses: actions-rs/tarpaulin@v0.1
         with:
           version: '0.18.0'
           args: '-- --test-threads 1'
@@ -46,10 +49,17 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           path-to-lcov: './lcov.info'
+      - name: Publish to crates.io
+        if: github.event_name == 'release'
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
+          args: --token ${{ secrets.CRATES_TOKEN }}
 
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
+    if: github.event_name != 'release'
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -66,6 +76,7 @@ jobs:
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
+    if: github.event_name != 'release'
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
@@ -78,19 +89,4 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-  
-  publish:
-    name: Publish to crates.io
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release'
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - uses: actions-rs/cargo@v1
-        with:
-          command: publish --token ${{ secrets.CRATES_TOKEN }}
           
