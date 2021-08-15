@@ -3,7 +3,6 @@ use std::fmt;
 use std::result::Result as StdResult;
 
 use r2d2::Error as R2D2Error;
-
 use rusqlite::Error as DBError;
 
 pub type Result<T> = StdResult<T, Error>;

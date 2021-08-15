@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
-use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE};
+use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
 
 use regex::Regex;
 
 use serde_json::json;
 
+use crate::errors::Result;
 use crate::tiles::{get_grid_data, get_tile_data, TileMeta, TileSummaryJSON};
 use crate::utils::{encode, get_blank_image, DataFormat};
 
@@ -65,12 +66,26 @@ pub fn tile_map() -> Response<Body> {
     Response::new(body)
 }
 
-fn is_host_valid(host: Option<&str>, allowed_hosts: &[String]) -> bool {
+fn get_host(req: &Request<Body>) -> Option<&str> {
+    let host = req.uri().host();
+    if host.is_some() {
+        return host;
+    }
+
+    let host = req.headers().get(HOST);
+    if host.is_some() {
+        return Some(host.unwrap().to_str().unwrap());
+    }
+
+    None
+}
+
+fn is_host_valid(host: &Option<&str>, allowed_hosts: &[String]) -> bool {
     if host.is_none() {
         return false;
     }
 
-    let host = host.unwrap();
+    let host = host.unwrap().split(':').next().unwrap();
     for pattern in allowed_hosts.iter() {
         if pattern == "*" || pattern == host {
             return true;
@@ -93,24 +108,21 @@ pub async fn get_service(
     allowed_hosts: Vec<String>,
     headers: Vec<(String, String)>,
     disable_preview: bool,
-) -> Result<Response<Body>, hyper::Error> {
-    let uri = request.uri();
+) -> Result<Response<Body>> {
+    let host = get_host(&request);
 
-    if !is_host_valid(uri.host(), &allowed_hosts) {
+    if !is_host_valid(&host, &allowed_hosts) {
         return Ok(forbidden());
     };
 
+    let host = host.unwrap();
+    let uri = request.uri();
     let path = uri.path();
     let scheme = match uri.scheme_str() {
         Some(scheme) => format!("{}://", scheme),
         None => String::from("http://"),
     };
-    let authority = if let Some(port) = uri.port() {
-        format!("{}:{}", uri.host().unwrap(), port)
-    } else {
-        String::from(uri.host().unwrap())
-    };
-    let base_url = format!("{}{}/services", scheme, authority);
+    let base_url = format!("{}{}/services", scheme, host);
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
