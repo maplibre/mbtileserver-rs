@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use hyper::header::{HeaderValue, CONTENT_ENCODING, CONTENT_TYPE, HOST};
+use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use hyper::{Body, Request, Response, StatusCode};
 
 use regex::Regex;
@@ -65,12 +65,12 @@ pub fn tile_map() -> Response<Body> {
     Response::new(body)
 }
 
-fn is_host_valid(host: Option<&HeaderValue>, allowed_hosts: &[String]) -> bool {
+fn is_host_valid(host: Option<&str>, allowed_hosts: &[String]) -> bool {
     if host.is_none() {
         return false;
     }
 
-    let host = host.unwrap().to_str().unwrap().split(':').next().unwrap();
+    let host = host.unwrap();
     for pattern in allowed_hosts.iter() {
         if pattern == "*" || pattern == host {
             return true;
@@ -94,21 +94,23 @@ pub async fn get_service(
     headers: Vec<(String, String)>,
     disable_preview: bool,
 ) -> Result<Response<Body>, hyper::Error> {
-    if !is_host_valid(request.headers().get(HOST), &allowed_hosts) {
+    let uri = request.uri();
+
+    if !is_host_valid(uri.host(), &allowed_hosts) {
         return Ok(forbidden());
     };
 
-    let uri = request.uri();
     let path = uri.path();
     let scheme = match uri.scheme_str() {
         Some(scheme) => format!("{}://", scheme),
         None => String::from("http://"),
     };
-    let base_url = format!(
-        "{}{}/services",
-        scheme,
-        request.headers()["host"].to_str().unwrap()
-    );
+    let authority = if let Some(port) = uri.port() {
+        format!("{}:{}", uri.host().unwrap(), port)
+    } else {
+        String::from(uri.host().unwrap())
+    };
+    let base_url = format!("{}{}/services", scheme, authority);
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
@@ -289,8 +291,8 @@ mod tests {
         headers: Option<Vec<(String, String)>>,
         disable_preview: bool,
     ) -> Response<Body> {
-        let request = Request::get(path)
-            .header("host", host)
+        let request = Request::builder()
+            .uri(format!("{}{}", host, path))
             .body(Body::from(""))
             .unwrap();
 
@@ -308,14 +310,14 @@ mod tests {
 
     #[tokio::test]
     async fn get_services() {
-        let response = setup("localhost", "/services", None, None, false).await;
+        let response = setup("http://localhost", "/services", None, None, false).await;
         assert_eq!(response.status(), 200);
     }
 
     #[tokio::test]
     async fn forbidden_domain() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -328,7 +330,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_all_domains() {
         let response = setup(
-            "example.com",
+            "http://example.com",
             "/services",
             Some(vec![String::from("*")]),
             None,
@@ -341,7 +343,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_domain() {
         let response = setup(
-            "example.com",
+            "http://example.com",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -354,7 +356,7 @@ mod tests {
     #[tokio::test]
     async fn forbidden_subdomain() {
         let response = setup(
-            "test.example.com",
+            "http://test.example.com",
             "/services",
             Some(vec![String::from("example.com")]),
             None,
@@ -367,7 +369,7 @@ mod tests {
     #[tokio::test]
     async fn allowed_subdomain() {
         let response = setup(
-            "test.example.com",
+            "http://test.example.com",
             "/services",
             Some(vec![String::from(".example.com")]),
             None,
@@ -380,7 +382,7 @@ mod tests {
     #[tokio::test]
     async fn get_details() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png",
             None,
             None,
@@ -393,7 +395,7 @@ mod tests {
     #[tokio::test]
     async fn get_preview_map() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/map",
             None,
             None,
@@ -406,7 +408,7 @@ mod tests {
     #[tokio::test]
     async fn get_existing_tile() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/0/0/0.png",
             None,
             None,
@@ -420,7 +422,7 @@ mod tests {
     async fn get_non_existing_tile() {
         // Geography Class PNG has no tiles beyond zoom level 1 and should return a blank image
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/2/0/0.png",
             None,
             None,
@@ -437,7 +439,7 @@ mod tests {
     #[tokio::test]
     async fn get_existing_utfgrid_data() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/0/0/0.json",
             None,
             None,
@@ -462,7 +464,7 @@ mod tests {
     async fn get_non_existing_utfgrid_data() {
         // should return empty content with 204 status
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/tiles/2/0/0.json",
             None,
             None,
@@ -475,7 +477,7 @@ mod tests {
     #[tokio::test]
     async fn disable_preview() {
         let response = setup(
-            "localhost",
+            "http://localhost",
             "/services/geography-class-png/map",
             None,
             None,

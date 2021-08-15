@@ -376,13 +376,14 @@ dependencies = [
 
 [[package]]
 name = "mbtileserver"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "clap",
  "flate2",
  "hyper",
  "lazy_static",
  "libsqlite3-sys",
+ "log",
  "pretty_env_logger",
  "r2d2",
  "r2d2_sqlite",

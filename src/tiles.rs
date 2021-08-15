@@ -190,7 +190,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             match get_tile_details(&p, file_name) {
                 Ok(tile_meta) => tiles.insert(parent_dir_cloned, tile_meta),
                 Err(err) => {
-                    println!("{}", err);
+                    warn!("{}", err);
                     None
                 }
             };
@@ -208,7 +208,7 @@ fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat>
         match get_data_format_via_query(tile_name, connection, "grid") {
             Ok(grid_format) => return Some(grid_format),
             Err(err) => {
-                println!("{}", err);
+                warn!("{}", err);
                 return None;
             }
         };
