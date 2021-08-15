@@ -72,9 +72,8 @@ fn get_host(req: &Request<Body>) -> Option<&str> {
         return host;
     }
 
-    let host = req.headers().get(HOST);
-    if host.is_some() {
-        return Some(host.unwrap().to_str().unwrap());
+    if let Some(host) = req.headers().get(HOST) {
+        return Some(host.to_str().unwrap());
     }
 
     None
