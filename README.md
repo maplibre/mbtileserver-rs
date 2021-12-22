@@ -21,14 +21,16 @@ USAGE:
     mbtileserver [FLAGS] [OPTIONS]
 
 FLAGS:
-        --allow-reload-api
+        --allow-reload-api       
             Allow reloading tilesets with /reload endpoint
-        --disable-preview    
+        --allow-reload-signal    
+            Allow reloading tilesets with a SIGHUP
+        --disable-preview        
             Disable preview map
-    -h, --help               
+    -h, --help                   
             Prints help information
 
-    -V, --version            
+    -V, --version                
             Prints version information
 
 

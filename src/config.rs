@@ -14,6 +14,7 @@ pub struct Args {
     pub headers: Vec<(String, String)>,
     pub disable_preview: bool,
     pub allow_reload_api: bool,
+    pub allow_reload_signal: bool,
 }
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
@@ -61,6 +62,11 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("allow_reload_api")
                 .long("allow-reload-api")
                 .help("Allow reloading tilesets with /reload endpoint\n"),
+        )
+        .arg(
+            Arg::with_name("allow_reload_signal")
+                .long("allow-reload-signal")
+                .help("Allow reloading tilesets with a SIGHUP\n"),
         )
 }
 
@@ -114,6 +120,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
 
     let disable_preview = matches.occurrences_of("disable_preview") != 0;
     let allow_reload_api = matches.occurrences_of("allow_reload_api") != 0;
+    let allow_reload_signal = matches.occurrences_of("allow_reload_signal") != 0;
 
     Ok(Args {
         tilesets,
@@ -122,6 +129,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         headers,
         disable_preview,
         allow_reload_api,
+        allow_reload_signal,
     })
 }
 
