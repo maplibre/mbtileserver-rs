@@ -21,6 +21,8 @@ USAGE:
     mbtileserver [FLAGS] [OPTIONS]
 
 FLAGS:
+        --allow-reload-api
+            Allow reloading tilesets with /reload endpoint
         --disable-preview    
             Disable preview map
     -h, --help               
@@ -53,6 +55,7 @@ You can adjust the log level by setting `RUST_LOG` environment variable. Possbil
 
 | Endpoint                                                     | Description                                                                    |
 |--------------------------------------------------------------|--------------------------------------------------------------------------------|
+| /reload                                                      | reloads tilesets from directory (if enabled with `--allow-reload`)             |
 | /services                                                    | lists all discovered and valid mbtiles in the tiles directory                  |
 | /services/\<path-to-tileset>                                 | shows tileset metadata                                                         |
 | /services/\<path-to-tileset>/map                             | tileset preview                                                                |

@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
@@ -9,11 +8,12 @@ use crate::tiles;
 
 #[derive(Clone, Debug)]
 pub struct Args {
-    pub tilesets: HashMap<String, tiles::TileMeta>,
+    pub tilesets: tiles::Tilesets,
     pub port: u16,
     pub allowed_hosts: Vec<String>,
     pub headers: Vec<(String, String)>,
     pub disable_preview: bool,
+    pub allow_reload_api: bool,
 }
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
@@ -56,6 +56,11 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("disable_preview")
                 .long("disable-preview")
                 .help("Disable preview map\n"),
+        )
+        .arg(
+            Arg::with_name("allow_reload_api")
+                .long("allow-reload-api")
+                .help("Allow reloading tilesets with /reload endpoint\n"),
         )
 }
 
@@ -108,6 +113,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
     }
 
     let disable_preview = matches.occurrences_of("disable_preview") != 0;
+    let allow_reload_api = matches.occurrences_of("allow_reload_api") != 0;
 
     Ok(Args {
         tilesets,
@@ -115,6 +121,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         allowed_hosts,
         headers,
         disable_preview,
+        allow_reload_api,
     })
 }
 

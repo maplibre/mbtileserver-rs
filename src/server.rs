@@ -1,9 +1,8 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
-use std::collections::HashMap;
 
 use crate::service;
-use crate::tiles::TileMeta;
+use crate::tiles::Tilesets;
 
 #[tokio::main]
 pub async fn run(
@@ -11,7 +10,8 @@ pub async fn run(
     allowed_hosts: Vec<String>,
     headers: Vec<(String, String)>,
     disable_preview: bool,
-    tilesets: HashMap<String, TileMeta>,
+    allow_reload_api: bool,
+    tilesets: Tilesets,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = ([0, 0, 0, 0], port).into();
     let server = Server::try_bind(&addr)?;
@@ -28,6 +28,7 @@ pub async fn run(
                     allowed_hosts.clone(),
                     headers.clone(),
                     disable_preview,
+                    allow_reload_api,
                 )
             }))
         }
