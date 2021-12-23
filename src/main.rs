@@ -30,16 +30,7 @@ fn main() {
         }
     };
 
-    if let Err(e) = server::run(
-        args.port,
-        args.allowed_hosts,
-        args.headers,
-        args.disable_preview,
-        args.allow_reload_api,
-        args.allow_reload_signal,
-        args.reload_interval,
-        args.tilesets,
-    ) {
+    if let Err(e) = server::run(args) {
         error!("Server error: {}", e);
         std::process::exit(1);
     }
