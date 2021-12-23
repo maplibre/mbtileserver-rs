@@ -1,5 +1,6 @@
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+use std::time::Duration;
 
 use crate::service;
 use crate::tiles::Tilesets;
@@ -12,6 +13,7 @@ pub async fn run(
     disable_preview: bool,
     allow_reload_api: bool,
     allow_reload_signal: bool,
+    reload_interval: Option<Duration>,
     tilesets: Tilesets,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = ([0, 0, 0, 0], port).into();
@@ -47,6 +49,18 @@ pub async fn run(
             loop {
                 handler.recv().await;
                 println!("Caught SIGHUP, reloading tilesets");
+                tilesets.reload();
+            }
+        });
+    }
+
+    if let Some(interval) = reload_interval {
+        let tilesets = tilesets.clone();
+        println!("Reloading every {} seconds", interval.as_secs());
+        tokio::spawn(async move {
+            let mut timer = tokio::time::interval(interval);
+            loop {
+                timer.tick().await;
                 tilesets.reload();
             }
         });

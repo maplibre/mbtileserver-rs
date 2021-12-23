@@ -37,6 +37,7 @@ fn main() {
         args.disable_preview,
         args.allow_reload_api,
         args.allow_reload_signal,
+        args.reload_interval,
         args.tilesets,
     ) {
         error!("Server error: {}", e);
