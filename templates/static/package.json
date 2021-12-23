@@ -22,6 +22,10 @@
   },
   "dependencies": {
     "d3-fetch": "^3.0.1",
+    "leaflet": "^1.7.1",
+    "leaflet-basemaps": "^0.3.4",
+    "leaflet-range": "^0.1.5",
+    "leaflet-zoombox": "^0.5.2",
     "ol": "^6.6.1",
     "ol-mapbox-style": "^6.4.1"
   }

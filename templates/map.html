@@ -22,6 +22,17 @@
             right: 0;
             border-top: 2px solid #aaa;
         }
+
+        nav {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            padding: 5px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 50%);
+        }
     </style>
 </head>
 
@@ -30,6 +41,10 @@
     <div style="display: none;">
       <div id="Info"></div>
     </div>
+    <nav>
+        <a href="?leaflet">Leaflet</a>
+        <a href="?ol">OpenLayers</a>
+    </nav>
     <script>{{js}}</script>
 </body>
 
