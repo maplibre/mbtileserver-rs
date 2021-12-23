@@ -24,6 +24,7 @@ FLAGS:
         --allow-reload-api       Allow reloading tilesets with /reload endpoint
         --allow-reload-signal    Allow reloading tilesets with a SIGHUP
         --disable-preview        Disable preview map
+        --disable-watcher        Disable fs watcher for automatic tileset reload
     -h, --help                   Prints help information
     -V, --version                Prints version information
 

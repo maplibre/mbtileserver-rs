@@ -1,6 +1,8 @@
 use crate::config::Args;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+use notify::Watcher;
+use std::time::Duration;
 
 use crate::service;
 
@@ -56,6 +58,27 @@ pub async fn run(args: Args) -> Result<(), Box<dyn std::error::Error + Send + Sy
                 tilesets.reload();
             }
         });
+    }
+
+    if !args.disable_watcher {
+        let tilesets = args.tilesets.clone();
+        println!("Watching FS for changes on {:?}", tilesets.get_path());
+        drop(std::thread::spawn(move || {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut watcher = notify::watcher(tx, Duration::from_secs(10)).unwrap();
+            watcher
+                .watch(&args.tilesets.get_path(), notify::RecursiveMode::Recursive)
+                .unwrap();
+            loop {
+                match rx.recv() {
+                    Ok(_) => {
+                        println!("Tileset directory changed, reloading");
+                        tilesets.reload()
+                    }
+                    Err(e) => println!("watch error: {:?}", e),
+                }
+            }
+        }));
     }
 
     println!("Listening on http://{}", addr);

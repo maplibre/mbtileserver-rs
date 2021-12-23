@@ -89,6 +89,10 @@ impl Tilesets {
         self.data.lock().unwrap().data.contains_key(key.as_ref())
     }
 
+    pub fn get_path(&self) -> PathBuf {
+        self.data.lock().unwrap().path.clone()
+    }
+
     pub fn reload(&self) {
         let mut data = self.data.lock().unwrap();
         let replacement = discover_tilesets(String::new(), data.path.clone());

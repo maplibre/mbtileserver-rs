@@ -22,6 +22,7 @@ pub struct Args {
     pub allow_reload_api: bool,
     pub allow_reload_signal: bool,
     pub reload_interval: Option<Duration>,
+    pub disable_watcher: bool,
 }
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
@@ -82,6 +83,11 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
                 .long_help("\"*\" in 1h30m format\n")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("disable_watcher")
+                .long("disable-watcher")
+                .help("Disable fs watcher for automatic tileset reload\n"),
+        )
 }
 
 pub fn parse(matches: ArgMatches) -> Result<Args> {
@@ -132,10 +138,6 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         }
     }
 
-    let disable_preview = matches.occurrences_of("disable_preview") != 0;
-    let allow_reload_api = matches.occurrences_of("allow_reload_api") != 0;
-    let allow_reload_signal = matches.occurrences_of("allow_reload_signal") != 0;
-
     let reload_interval = match matches.value_of("reload_interval") {
         Some(str) => {
             let mut duration = Duration::ZERO;
@@ -161,6 +163,11 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         None => None,
     };
 
+    let disable_preview = matches.occurrences_of("disable_preview") != 0;
+    let allow_reload_api = matches.occurrences_of("allow_reload_api") != 0;
+    let allow_reload_signal = matches.occurrences_of("allow_reload_signal") != 0;
+    let disable_watcher = matches.occurrences_of("disable_watcher") != 0;
+
     Ok(Args {
         tilesets,
         port,
@@ -170,6 +177,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         allow_reload_api,
         allow_reload_signal,
         reload_interval,
+        disable_watcher,
     })
 }
 
