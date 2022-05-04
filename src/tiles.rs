@@ -1,3 +1,4 @@
+use log::warn;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::read_dir;
@@ -205,11 +206,11 @@ fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat>
         .query_row([], |row| Ok(row.get(0).unwrap()))
         .unwrap();
     if count == 5 {
-        match get_data_format_via_query(tile_name, connection, "grid") {
-            Ok(grid_format) => return Some(grid_format),
+        return match get_data_format_via_query(tile_name, connection, "grid") {
+            Ok(grid_format) => Some(grid_format),
             Err(err) => {
                 warn!("{}", err);
-                return None;
+                None
             }
         };
     }

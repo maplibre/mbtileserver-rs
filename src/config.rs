@@ -3,6 +3,7 @@ use std::env;
 use std::path::PathBuf;
 
 use clap::{crate_version, App, Arg, ArgMatches};
+use log::warn;
 
 use crate::errors::{Error, Result};
 use crate::tiles;
@@ -18,7 +19,7 @@ pub struct Args {
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
     App::new("mbtileserver")
-        .about("A simple mbtile server")
+        .about("A simple mbtiles server")
         .version(crate_version!())
         .arg(
             Arg::with_name("directory")

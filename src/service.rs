@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
+use lazy_static::lazy_static;
 
 use regex::Regex;
 
@@ -212,20 +213,18 @@ pub async fn get_service(
                         if segments[segments.len() - 1] == "map" {
                             // Tileset map preview (/services/<tileset-path>/map)
                             let tile_name = segments[1..segments.len() - 1].join("/");
-                            match tilesets.get(&tile_name) {
+                            return match tilesets.get(&tile_name) {
                                 Some(_) => {
                                     if disable_preview {
                                         return Ok(not_found());
                                     }
-                                    return Ok(tile_map());
+                                    Ok(tile_map())
                                 }
-                                None => {
-                                    return Ok(bad_request(format!(
-                                        "Tileset does not exist: {}",
-                                        tile_name
-                                    )))
-                                }
-                            }
+                                None => Ok(bad_request(format!(
+                                    "Tileset does not exist: {}",
+                                    tile_name
+                                ))),
+                            };
                         }
                         return Ok(bad_request(format!(
                             "Tileset does not exist: {}",

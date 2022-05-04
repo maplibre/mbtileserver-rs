@@ -1,16 +1,4 @@
-extern crate clap;
-extern crate flate2;
-extern crate hyper;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate pretty_env_logger;
-extern crate r2d2;
-extern crate r2d2_sqlite;
-extern crate regex;
-extern crate serde;
-extern crate serde_json;
+use log::error;
 
 mod config;
 mod errors;
