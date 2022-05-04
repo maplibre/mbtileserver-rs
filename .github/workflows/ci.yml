@@ -28,7 +28,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-  
+
   coverage_and_publish:
     runs-on: ubuntu-latest
     steps:
@@ -56,8 +56,8 @@ jobs:
           command: publish
           args: --token ${{ secrets.CRATES_TOKEN }}
 
-  fmt:
-    name: Rustfmt
+  lint:
+    name: Linting
     runs-on: ubuntu-latest
     if: github.event_name != 'release'
     steps:
@@ -67,26 +67,12 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-      - run: rustup component add rustfmt
+      - run: rustup component add rustfmt clippy
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    if: github.event_name != 'release'
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          override: true
-      - run: rustup component add clippy
       - uses: actions-rs/cargo@v1
         with:
           command: clippy
           args: -- -D warnings
-          
