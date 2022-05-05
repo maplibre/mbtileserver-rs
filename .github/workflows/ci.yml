@@ -1,16 +1,14 @@
-name: Lint, test, and publish
+name: Lint and test
 
 on:
   push:
     branches:
-      - develop
-  release:
-    types: [published]
+      - main
+  pull_request:
 
 jobs:
   tests:
     runs-on: ubuntu-latest
-    if: github.event_name != 'release'
     strategy:
       matrix:
         rust:
@@ -29,7 +27,7 @@ jobs:
         with:
           command: test
 
-  coverage_and_publish:
+  coverage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -49,17 +47,10 @@ jobs:
         with:
           github-token: ${{secrets.GITHUB_TOKEN}}
           path-to-lcov: './lcov.info'
-      - name: Publish to crates.io
-        if: github.event_name == 'release'
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: --token ${{ secrets.CRATES_TOKEN }}
 
   lint:
     name: Linting
     runs-on: ubuntu-latest
-    if: github.event_name != 'release'
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
