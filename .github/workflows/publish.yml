@@ -1,0 +1,35 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+
+  coverage_and_publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+        # TODO: On publish, do we need to run these two coverage steps?
+      - name: Generate coverage info
+        uses: actions-rs/tarpaulin@v0.1
+        with:
+          version: '0.18.0'
+          args: '-- --test-threads 1'
+          out-type: 'Lcov'
+      - name: Upload to coveralls.io
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          path-to-lcov: './lcov.info'
+      - name: Publish to crates.io
+        if: github.event_name == 'release'
+        uses: actions-rs/cargo@v1
+        with:
+          command: publish
+          args: --token ${{ secrets.CRATES_TOKEN }}
