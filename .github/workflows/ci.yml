@@ -1,4 +1,4 @@
-name: Lint and test
+name: CI
 
 on:
   push:
@@ -22,6 +22,20 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust }}
           override: true
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
           components: rustfmt, clippy
       - name: Formatting (fmt)
         uses: actions-rs/cargo@v1
@@ -33,12 +47,9 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-      - name: Test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
 
   coverage:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
