@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
-use clap::{crate_version, Command, Arg, ArgMatches};
+use clap::{crate_version, Arg, ArgMatches, Command};
 use log::warn;
 
 use crate::errors::{Error, Result};
