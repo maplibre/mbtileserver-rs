@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
 
@@ -8,7 +6,7 @@ use regex::Regex;
 use serde_json::json;
 
 use crate::errors::Result;
-use crate::tiles::{get_grid_data, get_tile_data, TileMeta, TileSummaryJSON};
+use crate::tiles::{get_grid_data, get_tile_data, TileSummaryJSON, Tilesets};
 use crate::utils::{encode, get_blank_image, DataFormat};
 
 lazy_static! {
@@ -103,10 +101,11 @@ fn is_host_valid(host: &Option<&str>, allowed_hosts: &[String]) -> bool {
 
 pub async fn get_service(
     request: Request<Body>,
-    tilesets: HashMap<String, TileMeta>,
+    tilesets: Tilesets,
     allowed_hosts: Vec<String>,
     headers: Vec<(String, String)>,
     disable_preview: bool,
+    allow_reload_api: bool,
 ) -> Result<Response<Body>> {
     let host = get_host(&request);
 
@@ -207,7 +206,7 @@ pub async fn get_service(
                 // Tileset details (/services/<tileset-path>)
                 let tile_name = segments[1..].join("/");
                 let tile_meta = match tilesets.get(&tile_name) {
-                    Some(tile_meta) => tile_meta.clone(),
+                    Some(tile_meta) => tile_meta,
                     None => {
                         if segments[segments.len() - 1] == "map" {
                             // Tileset map preview (/services/<tileset-path>/map)
@@ -279,6 +278,13 @@ pub async fn get_service(
                     .header(CONTENT_TYPE, "application/json")
                     .body(Body::from(serde_json::to_string(&tile_meta_json).unwrap()))
                     .unwrap()); // TODO handle error
+            } else if path == "/reload" {
+                if allow_reload_api {
+                    tilesets.reload();
+                    return Ok(no_content());
+                } else {
+                    return Ok(forbidden());
+                }
             }
         }
     };
@@ -301,6 +307,7 @@ mod tests {
         allowed_hosts: Option<Vec<String>>,
         headers: Option<Vec<(String, String)>>,
         disable_preview: bool,
+        allow_reload: bool,
     ) -> Response<Body> {
         let request = Request::builder()
             .uri(format!("{}{}", host, path))
@@ -314,6 +321,7 @@ mod tests {
             allowed_hosts.unwrap_or(vec![String::from("*")]),
             headers.unwrap_or(vec![]),
             disable_preview,
+            allow_reload,
         )
         .await
         .unwrap()
@@ -321,7 +329,7 @@ mod tests {
 
     #[tokio::test]
     async fn get_services() {
-        let response = setup("http://localhost", "/services", None, None, false).await;
+        let response = setup("http://localhost", "/services", None, None, false, false).await;
         assert_eq!(response.status(), 200);
     }
 
@@ -332,6 +340,7 @@ mod tests {
             "/services",
             Some(vec![String::from("example.com")]),
             None,
+            false,
             false,
         )
         .await;
@@ -346,6 +355,7 @@ mod tests {
             Some(vec![String::from("*")]),
             None,
             false,
+            false,
         )
         .await;
         assert_eq!(response.status(), 200);
@@ -358,6 +368,7 @@ mod tests {
             "/services",
             Some(vec![String::from("example.com")]),
             None,
+            false,
             false,
         )
         .await;
@@ -372,6 +383,7 @@ mod tests {
             Some(vec![String::from("example.com")]),
             None,
             false,
+            false,
         )
         .await;
         assert_eq!(response.status(), 403);
@@ -384,6 +396,7 @@ mod tests {
             "/services",
             Some(vec![String::from(".example.com")]),
             None,
+            false,
             false,
         )
         .await;
@@ -398,6 +411,7 @@ mod tests {
             None,
             None,
             false,
+            false,
         )
         .await;
         assert_eq!(response.status(), 200);
@@ -410,6 +424,7 @@ mod tests {
             "/services/geography-class-png/map",
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -424,6 +439,7 @@ mod tests {
             None,
             None,
             false,
+            false,
         )
         .await;
         assert_eq!(response.status(), 200);
@@ -437,6 +453,7 @@ mod tests {
             "/services/geography-class-png/tiles/2/0/0.png",
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -454,6 +471,7 @@ mod tests {
             "/services/geography-class-png/tiles/0/0/0.json",
             None,
             None,
+            false,
             false,
         )
         .await;
@@ -480,6 +498,7 @@ mod tests {
             None,
             None,
             false,
+            false,
         )
         .await;
         assert_eq!(response.status(), 204);
@@ -493,6 +512,7 @@ mod tests {
             None,
             None,
             true,
+            false,
         )
         .await;
         assert_eq!(response.status(), 404);

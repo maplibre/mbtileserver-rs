@@ -21,27 +21,22 @@ USAGE:
     mbtileserver [FLAGS] [OPTIONS]
 
 FLAGS:
-        --disable-preview    
-            Disable preview map
-    -h, --help               
-            Prints help information
-
-    -V, --version            
-            Prints version information
-
+        --allow-reload-api       Allow reloading tilesets with /reload endpoint
+        --allow-reload-signal    Allow reloading tilesets with a SIGHUP
+        --disable-preview        Disable preview map
+        --disable-watcher        Disable fs watcher for automatic tileset reload
+    -h, --help                   Prints help information
+    -V, --version                Prints version information
 
 OPTIONS:
-        --allowed-hosts <allowed_hosts>    
-            "*" matches all domains and ".<domain>" matches all subdomains for the given domain
-             [default: localhost, 127.0.0.1, [::1]]
-    -d, --directory <directory>            
-            Tiles directory
-             [default: ./tiles]
-    -H, --header <header>...               
-            Add custom header
-    -p, --port <port>                      
-            Server port
-             [default: 3000]
+        --allowed-hosts <allowed_hosts>        A comma-separated list of allowed hosts [default: localhost, 127.0.0.1,
+                                               [::1]]
+    -d, --directory <directory>                Tiles directory
+                                                [default: ./tiles]
+    -H, --header <header>...                   Add custom header
+    -p, --port <port>                          Server port
+                                                [default: 3000]
+        --reload-interval <reload_interval>    An interval at which tilesets get reloaded
 ```
 
 Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.
@@ -53,6 +48,7 @@ You can adjust the log level by setting `RUST_LOG` environment variable. Possbil
 
 | Endpoint                                                     | Description                                                                    |
 |--------------------------------------------------------------|--------------------------------------------------------------------------------|
+| /reload                                                      | reloads tilesets from directory (if enabled with `--allow-reload`)             |
 | /services                                                    | lists all discovered and valid mbtiles in the tiles directory                  |
 | /services/\<path-to-tileset>                                 | shows tileset metadata                                                         |
 | /services/\<path-to-tileset>/map                             | tileset preview                                                                |

@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OpenFlags};
@@ -57,6 +58,55 @@ pub struct UTFGrid {
     pub data: HashMap<String, JSONValue>,
     pub grid: Vec<String>,
     pub keys: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+struct TilesetsData {
+    pub data: HashMap<String, TileMeta>,
+    pub path: PathBuf,
+}
+
+#[derive(Clone, Debug)]
+pub struct Tilesets {
+    data: Arc<Mutex<TilesetsData>>,
+}
+impl Tilesets {
+    pub fn new(data: HashMap<String, TileMeta>, path: PathBuf) -> Tilesets {
+        Tilesets {
+            data: Arc::new(Mutex::new(TilesetsData { data, path })),
+        }
+    }
+
+    pub fn get<S: AsRef<str>>(&self, key: S) -> Option<TileMeta> {
+        self.data.lock().unwrap().data.get(key.as_ref()).cloned()
+    }
+    #[allow(dead_code)]
+    pub fn len(&self) -> usize {
+        self.data.lock().unwrap().data.len()
+    }
+    #[allow(dead_code)]
+    pub fn contains_key<S: AsRef<str>>(&self, key: S) -> bool {
+        self.data.lock().unwrap().data.contains_key(key.as_ref())
+    }
+
+    pub fn get_path(&self) -> PathBuf {
+        self.data.lock().unwrap().path.clone()
+    }
+
+    pub fn reload(&self) {
+        let mut data = self.data.lock().unwrap();
+        let replacement = discover_tilesets(String::new(), data.path.clone());
+        data.data.clear();
+        data.data.extend(replacement);
+    }
+}
+impl IntoIterator for Tilesets {
+    type Item = (String, TileMeta);
+    type IntoIter = <HashMap<String, TileMeta> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.lock().unwrap().data.clone().into_iter()
+    }
 }
 
 pub fn get_data_format_via_query(
@@ -172,10 +222,10 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
     Ok(metadata)
 }
 
-pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, TileMeta> {
+pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> Tilesets {
     // Walk through the given path and its subfolders, find all valid mbtiles and create and return a map of mbtiles file names to their absolute path
     let mut tiles = HashMap::new();
-    for p in read_dir(path).unwrap() {
+    for p in read_dir(path.clone()).unwrap() {
         let p = p.unwrap().path();
         if p.is_dir() {
             let dir_name = p.file_stem().unwrap().to_str().unwrap();
@@ -196,7 +246,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             };
         }
     }
-    tiles
+    Tilesets::new(tiles, path)
 }
 
 fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat> {

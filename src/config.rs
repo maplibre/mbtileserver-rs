@@ -1,19 +1,28 @@
-use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use clap::{crate_version, App, Arg, ArgMatches};
+use regex::Regex;
 
 use crate::errors::{Error, Result};
 use crate::tiles;
 
+lazy_static! {
+    static ref DURATION_RE: Regex = Regex::new(r"\d+[smhd]").unwrap();
+}
+
 #[derive(Clone, Debug)]
 pub struct Args {
-    pub tilesets: HashMap<String, tiles::TileMeta>,
+    pub tilesets: tiles::Tilesets,
     pub port: u16,
     pub allowed_hosts: Vec<String>,
     pub headers: Vec<(String, String)>,
     pub disable_preview: bool,
+    pub allow_reload_api: bool,
+    pub allow_reload_signal: bool,
+    pub reload_interval: Option<Duration>,
+    pub disable_watcher: bool,
 }
 
 pub fn get_app<'a, 'b>() -> App<'a, 'b> {
@@ -56,6 +65,28 @@ pub fn get_app<'a, 'b>() -> App<'a, 'b> {
             Arg::with_name("disable_preview")
                 .long("disable-preview")
                 .help("Disable preview map\n"),
+        )
+        .arg(
+            Arg::with_name("allow_reload_api")
+                .long("allow-reload-api")
+                .help("Allow reloading tilesets with /reload endpoint\n"),
+        )
+        .arg(
+            Arg::with_name("allow_reload_signal")
+                .long("allow-reload-signal")
+                .help("Allow reloading tilesets with a SIGHUP\n"),
+        )
+        .arg(
+            Arg::with_name("reload_interval")
+                .long("reload-interval")
+                .help("An interval at which tilesets get reloaded")
+                .long_help("\"*\" in 1h30m format\n")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("disable_watcher")
+                .long("disable-watcher")
+                .help("Disable fs watcher for automatic tileset reload\n"),
         )
 }
 
@@ -107,7 +138,35 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         }
     }
 
+    let reload_interval = match matches.value_of("reload_interval") {
+        Some(str) => {
+            let mut duration = Duration::ZERO;
+            for mat in DURATION_RE.find_iter(str) {
+                let mut mat = mat.as_str().to_owned();
+                let char = mat.chars().nth(mat.len() - 1).unwrap();
+                mat.truncate(mat.len() - 1);
+                let multiplier = match char {
+                    's' => 1,
+                    'm' => 60,
+                    'h' => 60 * 60,
+                    'd' => 60 * 60 * 24,
+                    _ => return Err(Error::Config("Invalid value for duration".to_string())),
+                };
+                let qty = match mat.parse::<u64>() {
+                    Ok(v) => v,
+                    Err(_) => return Err(Error::Config("Invalid value for duration".to_string())),
+                };
+                duration += Duration::from_secs(multiplier * qty);
+            }
+            Some(duration)
+        }
+        None => None,
+    };
+
     let disable_preview = matches.occurrences_of("disable_preview") != 0;
+    let allow_reload_api = matches.occurrences_of("allow_reload_api") != 0;
+    let allow_reload_signal = matches.occurrences_of("allow_reload_signal") != 0;
+    let disable_watcher = matches.occurrences_of("disable_watcher") != 0;
 
     Ok(Args {
         tilesets,
@@ -115,6 +174,10 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         allowed_hosts,
         headers,
         disable_preview,
+        allow_reload_api,
+        allow_reload_signal,
+        reload_interval,
+        disable_watcher,
     })
 }
 
