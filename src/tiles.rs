@@ -173,8 +173,9 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
     Ok(metadata)
 }
 
+/// Walk through the given path and its subfolders, find all valid mbtiles and create
+/// and return a map of mbtiles file names to their absolute path
 pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, TileMeta> {
-    // Walk through the given path and its subfolders, find all valid mbtiles and create and return a map of mbtiles file names to their absolute path
     let mut tiles = HashMap::new();
     for p in read_dir(path).unwrap() {
         let p = p.unwrap().path();
@@ -191,7 +192,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             match get_tile_details(&p, file_name) {
                 Ok(tile_meta) => tiles.insert(parent_dir_cloned, tile_meta),
                 Err(err) => {
-                    warn!("{}", err);
+                    warn!("{err}");
                     None
                 }
             };
@@ -209,7 +210,7 @@ fn get_grid_info(tile_name: &str, connection: &Connection) -> Option<DataFormat>
         return match get_data_format_via_query(tile_name, connection, "grid") {
             Ok(grid_format) => Some(grid_format),
             Err(err) => {
-                warn!("{}", err);
+                warn!("{err}");
                 None
             }
         };

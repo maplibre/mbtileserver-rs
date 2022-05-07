@@ -74,8 +74,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         let directory = PathBuf::from(directory_str);
         if !directory.is_dir() {
             return Err(Error::Config(format!(
-                "Directory does not exists: {}",
-                directory_str
+                "Directory does not exists: {directory_str}",
             )));
         }
         tiles::discover_tilesets(String::new(), directory)
@@ -100,10 +99,10 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
                 if !k.is_empty() && !v.is_empty() {
                     headers.push((String::from(k), String::from(v)))
                 } else {
-                    warn!("Invalid header: {}", header);
+                    warn!("Invalid header: {header}");
                 }
             } else {
-                warn!("Invalid header: {}", header);
+                warn!("Invalid header: {header}");
             }
         }
     }
@@ -129,10 +128,10 @@ mod tests {
         let dir = TempDir::new("tiles").unwrap();
         let dir_name = String::from(dir.path().to_str().unwrap());
         dir.close().unwrap();
-        match parse(get_app().get_matches_from(vec!["mbtileserver", &format!("-d {}", dir_name)])) {
+        match parse(get_app().get_matches_from(vec!["mbtileserver", &format!("-d {dir_name}")])) {
             Ok(_) => (),
             Err(err) => {
-                assert!(format!("{}", err).starts_with("Directory does not exists"));
+                assert!(format!("{err}").starts_with("Directory does not exists"));
             }
         };
     }

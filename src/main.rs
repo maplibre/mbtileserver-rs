@@ -13,7 +13,7 @@ fn main() {
     let args = match config::parse(config::get_app().get_matches()) {
         Ok(args) => args,
         Err(err) => {
-            error!("{}", err);
+            error!("{err}");
             std::process::exit(1)
         }
     };
@@ -25,7 +25,7 @@ fn main() {
         args.disable_preview,
         args.tilesets,
     ) {
-        error!("Server error: {}", e);
+        error!("Server error: {e}");
         std::process::exit(1);
     }
 }
