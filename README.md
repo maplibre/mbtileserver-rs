@@ -47,7 +47,7 @@ OPTIONS:
 Run `mbtileserver` to start serving the mbtiles in a given folder. The default folder is `./tiles` and you can change it with `-d` flag.
 The server starts on port 3000 by default. You can use a different port via `-p` flag.
 
-You can adjust the log level by setting `RUST_LOG` environment variable. Possbile values are `trace`, `debug`, `info`, `warn`, `error`.
+You can adjust the log level by setting `RUST_LOG` environment variable. Possible values are `trace`, `debug`, `info`, `warn`, `error`.
 
 ### Endpoints
 
