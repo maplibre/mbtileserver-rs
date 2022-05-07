@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::env;
 use std::path::PathBuf;
 
-use clap::{crate_version, App, Arg, ArgMatches};
+use clap::{crate_version, Arg, ArgMatches, Command};
+use log::warn;
 
 use crate::errors::{Error, Result};
 use crate::tiles;
@@ -16,46 +17,46 @@ pub struct Args {
     pub disable_preview: bool,
 }
 
-pub fn get_app<'a, 'b>() -> App<'a, 'b> {
-    App::new("mbtileserver")
-        .about("A simple mbtile server")
+pub fn get_app<'a>() -> Command<'a> {
+    Command::new("mbtileserver")
+        .about("A simple mbtiles server")
         .version(crate_version!())
         .arg(
-            Arg::with_name("directory")
-                .short("d")
+            Arg::new("directory")
+                .short('d')
                 .long("directory")
                 .default_value("./tiles")
-                .help("Tiles directory\n")
+                .help("Tiles directory")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("port")
-                .short("p")
+            Arg::new("port")
+                .short('p')
                 .long("port")
                 .default_value("3000")
-                .help("Server port\n")
+                .help("Server port")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("allowed_hosts")
+            Arg::new("allowed_hosts")
                 .long("allowed-hosts")
                 .default_value("localhost, 127.0.0.1, [::1]")
                 .help("A comma-separated list of allowed hosts")
-                .long_help("\"*\" matches all domains and \".<domain>\" matches all subdomains for the given domain\n")
+                .long_help("\"*\" matches all domains and \".<domain>\" matches all subdomains for the given domain")
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("header")
-                .short("H")
+            Arg::new("header")
+                .short('H')
                 .long("header")
-                .help("Add custom header\n")
-                .multiple(true)
+                .help("Add custom header")
+                .multiple_occurrences(true)
                 .takes_value(true),
         )
         .arg(
-            Arg::with_name("disable_preview")
+            Arg::new("disable_preview")
                 .long("disable-preview")
-                .help("Disable preview map\n"),
+                .help("Disable preview map"),
         )
 }
 
@@ -73,8 +74,7 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
         let directory = PathBuf::from(directory_str);
         if !directory.is_dir() {
             return Err(Error::Config(format!(
-                "Directory does not exists: {}",
-                directory_str
+                "Directory does not exists: {directory_str}",
             )));
         }
         tiles::discover_tilesets(String::new(), directory)
@@ -99,10 +99,10 @@ pub fn parse(matches: ArgMatches) -> Result<Args> {
                 if !k.is_empty() && !v.is_empty() {
                     headers.push((String::from(k), String::from(v)))
                 } else {
-                    warn!("Invalid header: {}", header);
+                    warn!("Invalid header: {header}");
                 }
             } else {
-                warn!("Invalid header: {}", header);
+                warn!("Invalid header: {header}");
             }
         }
     }
@@ -128,10 +128,10 @@ mod tests {
         let dir = TempDir::new("tiles").unwrap();
         let dir_name = String::from(dir.path().to_str().unwrap());
         dir.close().unwrap();
-        match parse(get_app().get_matches_from(vec!["mbtileserver", &format!("-d {}", dir_name)])) {
+        match parse(get_app().get_matches_from(vec!["mbtileserver", &format!("-d {dir_name}")])) {
             Ok(_) => (),
             Err(err) => {
-                assert!(format!("{}", err).starts_with("Directory does not exists"));
+                assert!(format!("{err}").starts_with("Directory does not exists"));
             }
         };
     }
@@ -161,7 +161,7 @@ mod tests {
 
     #[test]
     fn test_invalid_headers() {
-        let app = get_app().get_matches_from_safe(vec!["mbtileserver", "-H"]);
+        let app = get_app().try_get_matches_from(vec!["mbtileserver", "-H"]);
         assert!(app.is_err());
 
         let args = parse(get_app().get_matches_from(vec!["mbtileserver", "-H k:"])).unwrap();

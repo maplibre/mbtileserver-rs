@@ -33,7 +33,7 @@ pub async fn run(
         }
     });
 
-    println!("Listening on http://{}", addr);
+    println!("Listening on http://{addr}");
     server.serve(service).await?;
 
     Ok(())

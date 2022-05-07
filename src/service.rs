@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
+use lazy_static::lazy_static;
 
 use regex::Regex;
 
@@ -118,10 +119,10 @@ pub async fn get_service(
     let uri = request.uri();
     let path = uri.path();
     let scheme = match uri.scheme_str() {
-        Some(scheme) => format!("{}://", scheme),
+        Some(scheme) => format!("{scheme}://"),
         None => String::from("http://"),
     };
-    let base_url = format!("{}{}/services", scheme, host);
+    let base_url = format!("{scheme}{host}/services");
 
     match TILE_URL_RE.captures(path) {
         Some(matches) => {
@@ -194,7 +195,7 @@ pub async fn get_service(
                     for (tile_name, tile_meta) in tilesets {
                         tiles_summary.push(TileSummaryJSON {
                             image_type: tile_meta.tile_format,
-                            url: format!("{}/{}", base_url, tile_name),
+                            url: format!("{base_url}/{tile_name}"),
                         });
                     }
                     let resp_json = serde_json::to_string(&tiles_summary).unwrap(); // TODO handle error
@@ -212,29 +213,23 @@ pub async fn get_service(
                         if segments[segments.len() - 1] == "map" {
                             // Tileset map preview (/services/<tileset-path>/map)
                             let tile_name = segments[1..segments.len() - 1].join("/");
-                            match tilesets.get(&tile_name) {
+                            return match tilesets.get(&tile_name) {
                                 Some(_) => {
                                     if disable_preview {
                                         return Ok(not_found());
                                     }
-                                    return Ok(tile_map());
+                                    Ok(tile_map())
                                 }
                                 None => {
-                                    return Ok(bad_request(format!(
-                                        "Tileset does not exist: {}",
-                                        tile_name
-                                    )))
+                                    Ok(bad_request(format!("Tileset does not exist: {tile_name}")))
                                 }
-                            }
+                            };
                         }
-                        return Ok(bad_request(format!(
-                            "Tileset does not exist: {}",
-                            tile_name
-                        )));
+                        return Ok(bad_request(format!("Tileset does not exist: {tile_name}")));
                     }
                 };
                 let query_string = match request.uri().query() {
-                    Some(q) => format!("?{}", q),
+                    Some(q) => format!("?{q}"),
                     None => String::new(),
                 };
 
@@ -242,19 +237,15 @@ pub async fn get_service(
                     "name": tile_meta.name,
                     "version": tile_meta.version,
                     "tiles": vec![format!(
-                        "{}/{}/tiles/{{z}}/{{x}}/{{y}}.{}{}",
-                        base_url,
-                        tile_name,
-                        tile_meta.tile_format.format(),
-                        query_string
+                        "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.{format}{query_string}",
+                        format=tile_meta.tile_format.format()
                     )],
                     "tilejson": tile_meta.tilejson,
                     "scheme": tile_meta.scheme,
                     "id": tile_meta.id,
                     "format": tile_meta.tile_format,
                     "grids": tile_meta.grid_format.map(|_| vec![format!(
-                        "{}/{}/tiles/{{z}}/{{x}}/{{y}}.json{}",
-                        base_url, tile_name, query_string
+                        "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.json{query_string}",
                     )]),
                     "bounds": tile_meta.bounds,
                     "center": tile_meta.center,
@@ -272,7 +263,7 @@ pub async fn get_service(
                     }
                 }
                 if !disable_preview {
-                    tile_meta_json["map"] = json!(format!("{}/{}/{}", base_url, tile_name, "map"));
+                    tile_meta_json["map"] = json!(format!("{base_url}/{tile_name}/map"));
                 }
 
                 return Ok(Response::builder()
@@ -303,7 +294,7 @@ mod tests {
         disable_preview: bool,
     ) -> Response<Body> {
         let request = Request::builder()
-            .uri(format!("{}{}", host, path))
+            .uri(format!("{host}{path}"))
             .body(Body::from(""))
             .unwrap();
 
