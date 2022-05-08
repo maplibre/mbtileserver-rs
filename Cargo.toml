@@ -20,7 +20,7 @@ include = [
 coveralls = { repository = "maplibre/mbtileserver-rs" }
 
 [dependencies]
-clap = { version = "3.1", features = ["cargo"] }
+clap = { version = "3.1", features = ["cargo", "derive"] }
 flate2 = "1.0"
 hyper = { version = "0.14", features = ["server", "http1", "http2", "tcp"] }
 lazy_static = "1.4"

@@ -7,24 +7,17 @@ mod service;
 mod tiles;
 mod utils;
 
+use clap::Parser;
+
 fn main() {
     pretty_env_logger::init_timed();
 
-    let args = match config::parse(config::get_app().get_matches()) {
-        Ok(args) => args,
-        Err(err) => {
-            error!("{err}");
-            std::process::exit(1)
-        }
-    };
+    let args = config::Args::parse().post_parse().unwrap_or_else(|err| {
+        error!("{err}");
+        std::process::exit(1)
+    });
 
-    if let Err(e) = server::run(
-        args.port,
-        args.allowed_hosts,
-        args.headers,
-        args.disable_preview,
-        args.tilesets,
-    ) {
+    if let Err(e) = server::run(args) {
         error!("Server error: {e}");
         std::process::exit(1);
     }
