@@ -69,56 +69,70 @@ impl Args {
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     use tempdir::TempDir;
-//
-//     #[test]
-//     fn test_missing_directory() {
-//         let dir = TempDir::new("tiles").unwrap();
-//         let dir_name = String::from(dir.path().to_str().unwrap());
-//         dir.close().unwrap();
-//         match parse(get_app().get_matches_from(vec!["mbtileserver", &format!("-d {dir_name}")])) {
-//             Ok(_) => (),
-//             Err(err) => {
-//                 assert!(format!("{err}").starts_with("Directory does not exists"));
-//             }
-//         };
-//     }
-//
-//     #[test]
-//     fn test_valid_headers() {
-//         let args = parse(get_app().get_matches_from(vec![
-//             "mbtileserver",
-//             "--header=cache-control: public,max-age=14400",
-//             "--header=access-control-allow-origin: *",
-//         ]))
-//         .unwrap();
-//         assert_eq!(
-//             args.headers,
-//             vec![
-//                 (
-//                     String::from("cache-control"),
-//                     String::from("public,max-age=14400")
-//                 ),
-//                 (
-//                     String::from("access-control-allow-origin"),
-//                     String::from("*")
-//                 )
-//             ]
-//         );
-//     }
-//
-//     #[test]
-//     fn test_invalid_headers() {
-//         let app = get_app().try_get_matches_from(vec!["mbtileserver", "-H"]);
-//         assert!(app.is_err());
-//
-//         let args = parse(get_app().get_matches_from(vec!["mbtileserver", "-H k:"])).unwrap();
-//         assert_eq!(args.headers, vec![]);
-//
-//         let args = parse(get_app().get_matches_from(vec!["mbtileserver", "-H :v"])).unwrap();
-//         assert_eq!(args.headers, vec![]);
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempdir::TempDir;
+
+    #[test]
+    fn test_missing_directory() {
+        let dir = TempDir::new("tiles").unwrap();
+        let dir_name = String::from(dir.path().to_str().unwrap());
+        dir.close().unwrap();
+        let args = Args::try_parse_from(&["", &format!("-d {dir_name}")])
+            .unwrap()
+            .post_parse();
+        match args {
+            Ok(_) => (),
+            Err(err) => {
+                assert!(format!("{err}").starts_with("Directory does not exists"));
+            }
+        };
+    }
+
+    #[test]
+    fn test_valid_headers() {
+        let args = Args::try_parse_from(&[
+            "",
+            "--header",
+            "cache-control: public,max-age=14400",
+            "--header",
+            "access-control-allow-origin: *",
+        ])
+        .unwrap()
+        .post_parse()
+        .unwrap();
+        println!("{:?}", args.headers);
+        assert_eq!(
+            args.headers,
+            vec![
+                (
+                    String::from("cache-control"),
+                    String::from("public,max-age=14400")
+                ),
+                (
+                    String::from("access-control-allow-origin"),
+                    String::from("*")
+                )
+            ]
+        );
+    }
+
+    #[test]
+    fn test_invalid_headers() {
+        let app = Args::try_parse_from(&["", "-H"]);
+        assert!(app.is_err());
+
+        let args = Args::try_parse_from(&["", "-H k:"])
+            .unwrap()
+            .post_parse()
+            .unwrap();
+        assert_eq!(args.headers, vec![]);
+
+        let args = Args::try_parse_from(&["", "-H :v"])
+            .unwrap()
+            .post_parse()
+            .unwrap();
+        assert_eq!(args.headers, vec![]);
+    }
+}
