@@ -3,7 +3,7 @@
 # rust-mbtileserver
 
 [![Crates.io](https://img.shields.io/crates/v/mbtileserver.svg)](https://crates.io/crates/mbtileserver)
-[![Coverage Status](https://coveralls.io/repos/github/ka7eh/rust-mbtileserver/badge.svg?branch=develop)](https://coveralls.io/github/ka7eh/rust-mbtileserver?branch=develop)
+[![Coverage Status](https://coveralls.io/repos/github/maplibre/mbtileserver-rs/badge.svg)](https://coveralls.io/github/maplibre/mbtileserver-rs)
 
 _Tested with rust 1.54_
 
