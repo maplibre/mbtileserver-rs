@@ -175,7 +175,7 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
 
 /// Walk through the given path and its subfolders, find all valid mbtiles and create
 /// and return a map of mbtiles file names to their absolute path
-pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, TileMeta> {
+pub fn discover_tilesets(parent_dir: String, path: &PathBuf) -> HashMap<String, TileMeta> {
     let mut tiles = HashMap::new();
     for p in read_dir(path).unwrap() {
         let p = p.unwrap().path();
@@ -184,7 +184,7 @@ pub fn discover_tilesets(parent_dir: String, path: PathBuf) -> HashMap<String, T
             let mut parent_dir_cloned = parent_dir.clone();
             parent_dir_cloned.push_str(dir_name);
             parent_dir_cloned.push('/');
-            tiles.extend(discover_tilesets(parent_dir_cloned, p));
+            tiles.extend(discover_tilesets(parent_dir_cloned, &p));
         } else if p.extension().and_then(OsStr::to_str) == Some("mbtiles") {
             let file_name = p.file_stem().and_then(OsStr::to_str).unwrap();
             let mut parent_dir_cloned = parent_dir.clone();
@@ -298,7 +298,7 @@ mod tests {
     use super::*;
     #[test]
     fn get_list_of_valid_tilesets() {
-        let tilesets = discover_tilesets(String::new(), PathBuf::from("./tiles"));
+        let tilesets = discover_tilesets(String::new(), &PathBuf::from("./tiles"));
         // 2 out of 7 tilesets in ./tiles directory are invalid
         assert_eq!(tilesets.len(), 5);
 
