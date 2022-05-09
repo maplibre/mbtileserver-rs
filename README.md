@@ -5,9 +5,13 @@
 [![Crates.io](https://img.shields.io/crates/v/mbtileserver.svg)](https://crates.io/crates/mbtileserver)
 [![Coverage Status](https://coveralls.io/repos/github/maplibre/mbtileserver-rs/badge.svg)](https://coveralls.io/github/maplibre/mbtileserver-rs)
 
-_Tested with rust 1.54_
+_Tested with rust 1.60_
 
 A simple Rust-based server for map tiles stored in mbtiles format.
+
+### Getting Involved
+
+Join the #maplibre slack channel at OSMUS: get an invite at https://osmus-slack.herokuapp.com/
 
 ## Usage
 
@@ -15,7 +19,7 @@ Run `mbtileserver --help` for a list and description of the available flags:
 
 ```
 mbtileserver 0.1.7
-A simple mbtile server
+A simple mbtiles server
 
 USAGE:
     mbtileserver [FLAGS] [OPTIONS]
