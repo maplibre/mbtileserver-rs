@@ -6,7 +6,7 @@ import * as proj from 'ol/proj';
 import { MVT } from 'ol/format';
 import { Tile as TileLayer, VectorTile as VectorTileLayer } from 'ol/layer';
 import { OSM, UTFGrid, VectorTile as VectorTileSource, XYZ } from 'ol/source';
-import stylefunction from 'ol-mapbox-style/src/stylefunction';
+import { stylefunction } from 'ol-mapbox-style';
 import { json } from 'd3-fetch';
 
 const mapElement = document.getElementById('Map');
