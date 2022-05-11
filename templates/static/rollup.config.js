@@ -6,7 +6,7 @@ import { terser } from 'rollup-plugin-terser';
 export default {
 	input: 'index.js',
 	output: {
-		file: 'dist/core.min.js'		
+		file: 'dist/core.min.js'
 	},
 	plugins: [
         css({ output: 'core.min.css' }),
