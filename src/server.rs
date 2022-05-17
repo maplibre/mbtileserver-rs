@@ -1,7 +1,8 @@
-use crate::config::Args;
-use crate::service;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::Server;
+
+use crate::config::Args;
+use crate::service;
 
 #[tokio::main]
 pub async fn run(args: Args) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
