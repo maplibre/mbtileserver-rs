@@ -110,10 +110,7 @@ mod tests {
                     "cache-control".to_string(),
                     "public,max-age=14400".to_string(),
                 ),
-                (
-                    "access-control-allow-origin".to_string(),
-                    "*".to_string(),
-                )
+                ("access-control-allow-origin".to_string(), "*".to_string(),)
             ]
         );
     }
