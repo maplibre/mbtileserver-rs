@@ -3,7 +3,6 @@ use std::io::prelude::*;
 use flate2::read::{GzDecoder, ZlibDecoder};
 use flate2::write::GzEncoder;
 use flate2::Compression;
-
 use serde::{Deserialize, Serialize};
 
 use crate::errors::{Error, Result};
@@ -76,7 +75,7 @@ pub fn decode(data: Vec<u8>, data_type: DataFormat) -> Result<String> {
             z.read_to_string(&mut s).unwrap();
             Ok(s)
         }
-        _ => Err(Error::InvalidDataFormat(String::from(data_type.format()))),
+        _ => Err(Error::InvalidDataFormat(data_type.format().to_string())),
     }
 }
 

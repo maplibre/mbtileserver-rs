@@ -56,7 +56,7 @@ impl Args {
                 let k = kv[0].trim();
                 let v = kv[1].trim();
                 if !k.is_empty() && !v.is_empty() {
-                    self.headers.push((String::from(k), String::from(v)))
+                    self.headers.push((k.to_string(), v.to_string()))
                 } else {
                     warn!("Invalid header: {header}");
                 }
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn test_missing_directory() {
         let dir = TempDir::new("tiles").unwrap();
-        let dir_name = String::from(dir.path().to_str().unwrap());
+        let dir_name = dir.path().to_str().unwrap().to_string();
         dir.close().unwrap();
         let args = Args::try_parse_from(&["", &format!("-d {dir_name}")])
             .unwrap()
@@ -107,13 +107,10 @@ mod tests {
             args.headers,
             vec![
                 (
-                    String::from("cache-control"),
-                    String::from("public,max-age=14400")
+                    "cache-control".to_string(),
+                    "public,max-age=14400".to_string(),
                 ),
-                (
-                    String::from("access-control-allow-origin"),
-                    String::from("*")
-                )
+                ("access-control-allow-origin".to_string(), "*".to_string(),)
             ]
         );
     }

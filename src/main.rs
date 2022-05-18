@@ -1,3 +1,4 @@
+use clap::Parser;
 use log::error;
 
 mod config;
@@ -6,8 +7,6 @@ mod server;
 mod service;
 mod tiles;
 mod utils;
-
-use clap::Parser;
 
 fn main() {
     pretty_env_logger::init_timed();

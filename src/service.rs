@@ -3,9 +3,7 @@ use std::collections::HashMap;
 use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE, HOST};
 use hyper::{Body, Request, Response, StatusCode};
 use lazy_static::lazy_static;
-
 use regex::Regex;
-
 use serde_json::json;
 
 use crate::errors::Result;
@@ -120,7 +118,7 @@ pub async fn get_service(
     let path = uri.path();
     let scheme = match uri.scheme_str() {
         Some(scheme) => format!("{scheme}://"),
-        None => String::from("http://"),
+        None => "http://".to_string(),
     };
     let base_url = format!("{scheme}{host}/services");
 
@@ -302,7 +300,7 @@ mod tests {
         get_service(
             request,
             tilesets,
-            allowed_hosts.unwrap_or(vec![String::from("*")]),
+            allowed_hosts.unwrap_or(vec!["*".to_string()]),
             headers.unwrap_or(vec![]),
             disable_preview,
         )
@@ -321,7 +319,7 @@ mod tests {
         let response = setup(
             "http://localhost",
             "/services",
-            Some(vec![String::from("example.com")]),
+            Some(vec!["example.com".to_string()]),
             None,
             false,
         )
@@ -334,7 +332,7 @@ mod tests {
         let response = setup(
             "http://example.com",
             "/services",
-            Some(vec![String::from("*")]),
+            Some(vec!["*".to_string()]),
             None,
             false,
         )
@@ -347,7 +345,7 @@ mod tests {
         let response = setup(
             "http://example.com",
             "/services",
-            Some(vec![String::from("example.com")]),
+            Some(vec!["example.com".to_string()]),
             None,
             false,
         )
@@ -360,7 +358,7 @@ mod tests {
         let response = setup(
             "http://test.example.com",
             "/services",
-            Some(vec![String::from("example.com")]),
+            Some(vec!["example.com".to_string()]),
             None,
             false,
         )
@@ -373,7 +371,7 @@ mod tests {
         let response = setup(
             "http://test.example.com",
             "/services",
-            Some(vec![String::from(".example.com")]),
+            Some(vec![".example.com".to_string()]),
             None,
             false,
         )

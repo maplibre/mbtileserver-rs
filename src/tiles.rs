@@ -1,17 +1,15 @@
-use log::warn;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::{Path, PathBuf};
 
+use log::warn;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OpenFlags};
-
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JSONValue;
 
 use crate::errors::{Error, Result};
-
 use crate::utils::{decode, get_data_format, DataFormat};
 
 type Connection = r2d2::PooledConnection<SqliteConnectionManager>;
@@ -68,11 +66,7 @@ pub fn get_data_format_via_query(
     let query = match category {
         "tile" => r#"SELECT tile_data FROM tiles LIMIT 1"#,
         "grid" => r#"SELECT grid_utfgrid FROM grid_utfgrid LIMIT 1"#,
-        _ => {
-            return Err(Error::InvalidDataFormatQueryCategory(String::from(
-                tile_name,
-            )))
-        }
+        _ => return Err(Error::InvalidDataFormatQueryCategory(tile_name.to_string())),
     };
     let mut statement = match connection.prepare(query) {
         Ok(s) => s,
@@ -104,7 +98,7 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
     match statement.query_row([], |row| Ok(row.get::<_, i8>(0).unwrap_or(0))) {
         Ok(count) => {
             if count < 2 {
-                return Err(Error::MissingTable(String::from(tile_name)));
+                return Err(Error::MissingTable(tile_name.to_string()));
             }
         }
         Err(err) => return Err(Error::DBConnection(err)),
@@ -112,7 +106,7 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
 
     let tile_format = match get_data_format_via_query(tile_name, &connection, "tile") {
         Ok(tile_format) => match tile_format {
-            DataFormat::Unknown => return Err(Error::UnknownTileFormat(String::from(tile_name))),
+            DataFormat::Unknown => return Err(Error::UnknownTileFormat(tile_name.to_string())),
             DataFormat::Gzip => DataFormat::Pbf, // GZIP masks PBF format too
             _ => tile_format,
         },
@@ -124,9 +118,9 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
         path: PathBuf::from(path),
         name: None,
         version: None,
-        tilejson: String::from("2.1.0"),
-        scheme: String::from("xyz"),
-        id: String::from(tile_name),
+        tilejson: "2.1.0".to_string(),
+        scheme: "xyz".to_string(),
+        id: tile_name.to_string(),
         tile_format,
         grid_format: get_grid_info(tile_name, &connection),
         bounds: None,
@@ -296,6 +290,7 @@ pub fn get_tile_data(connection: &Connection, z: u32, x: u32, y: u32) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn get_list_of_valid_tilesets() {
         let tilesets = discover_tilesets(String::new(), &PathBuf::from("./tiles"));
