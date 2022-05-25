@@ -32,7 +32,8 @@ impl fmt::Display for Error {
                 write!(f, "Invalid query category: {tile_name}")
             }
             Error::UnknownTileFormat(tile_name) => write!(f, "Unknown tile format: {tile_name}"),
-            _ => write!(f, "{self}"),
+            Error::DBConnection(_) => write!(f, "Database connection error"),
+            Error::Pool(_) => write!(f, "Database pool connection error"),
         }
     }
 }

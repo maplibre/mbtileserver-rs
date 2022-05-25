@@ -2,14 +2,17 @@ use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::read_dir;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 use log::warn;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, OpenFlags};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JSONValue;
+use tilejson::{tilejson, Bounds, Center, TileJSON};
 
 use crate::errors::{Error, Result};
+
 use crate::utils::{decode, get_data_format, DataFormat};
 
 type Connection = r2d2::PooledConnection<SqliteConnectionManager>;
@@ -18,22 +21,11 @@ type Connection = r2d2::PooledConnection<SqliteConnectionManager>;
 pub struct TileMeta {
     pub connection_pool: r2d2::Pool<SqliteConnectionManager>,
     pub path: PathBuf,
-    pub name: Option<String>,
-    pub version: Option<String>,
-    pub tilejson: String,
-    pub scheme: String,
+    pub tilejson: TileJSON,
     pub id: String,
     pub tile_format: DataFormat,
     pub grid_format: Option<DataFormat>,
-    pub bounds: Option<Vec<f64>>,
-    pub center: Option<Vec<f64>>,
-    pub minzoom: Option<u32>,
-    pub maxzoom: Option<u32>,
-    pub description: Option<String>,
-    pub attribution: Option<String>,
     pub layer_type: Option<String>,
-    pub legend: Option<String>,
-    pub template: Option<String>,
     pub json: Option<JSONValue>,
 }
 
@@ -116,22 +108,14 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
     let mut metadata = TileMeta {
         connection_pool,
         path: PathBuf::from(path),
-        name: None,
-        version: None,
-        tilejson: "2.1.0".to_string(),
-        scheme: "xyz".to_string(),
+        tilejson: tilejson! {
+            tilejson: "2.1.0".to_string(),
+            tiles: vec!["".to_string()],
+        },
         id: tile_name.to_string(),
         tile_format,
         grid_format: get_grid_info(tile_name, &connection),
-        bounds: None,
-        center: None,
-        minzoom: None,
-        maxzoom: None,
-        description: None,
-        attribution: None,
         layer_type: None,
-        legend: None,
-        template: None,
         json: None,
     };
 
@@ -144,24 +128,20 @@ pub fn get_tile_details(path: &Path, tile_name: &str) -> Result<TileMeta> {
         let label: String = row.get(0).unwrap();
         let value: String = row.get(1).unwrap();
         match label.as_ref() {
-            "name" => metadata.name = Some(value),
-            "version" => metadata.version = Some(value),
-            "bounds" => {
-                metadata.bounds = Some(value.split(',').filter_map(|s| s.parse().ok()).collect())
-            }
-            "center" => {
-                metadata.center = Some(value.split(',').filter_map(|s| s.parse().ok()).collect())
-            }
-            "minzoom" => metadata.minzoom = Some(value.parse().unwrap()),
-            "maxzoom" => metadata.maxzoom = Some(value.parse().unwrap()),
-            "description" => metadata.description = Some(value),
-            "attribution" => metadata.attribution = Some(value),
+            "name" => metadata.tilejson.name = Some(value),
+            "version" => metadata.tilejson.version = Some(value),
+            "bounds" => metadata.tilejson.bounds = Some(Bounds::from_str(value.as_str()).unwrap()),
+            "center" => metadata.tilejson.center = Some(Center::from_str(value.as_str()).unwrap()),
+            "minzoom" => metadata.tilejson.minzoom = Some(value.parse().unwrap()),
+            "maxzoom" => metadata.tilejson.maxzoom = Some(value.parse().unwrap()),
+            "description" => metadata.tilejson.description = Some(value),
+            "attribution" => metadata.tilejson.attribution = Some(value),
             "type" => metadata.layer_type = Some(value),
-            "legend" => metadata.legend = Some(value),
-            "template" => metadata.template = Some(value),
+            "legend" => metadata.tilejson.legend = Some(value),
+            "template" => metadata.tilejson.template = Some(value),
             "json" => metadata.json = Some(serde_json::from_str(&value).unwrap()),
             _ => (),
-        }
+        };
     }
 
     Ok(metadata)
@@ -303,44 +283,44 @@ mod tests {
 
     #[test]
     fn get_tileset_metadata() {
-        let tileset_details = get_tile_details(
+        let metadata = get_tile_details(
             &PathBuf::from("./tiles/geography-class-png.mbtiles"),
             "geography-class-png",
         )
         .unwrap();
         // The rhs values are from metadata table of geography-class-png.mbtiles
-        assert_eq!(tileset_details.name.unwrap(), "Geography Class");
-        assert_eq!(tileset_details.version.unwrap(), "1.0.0");
-        assert_eq!(tileset_details.minzoom.unwrap(), 0);
-        assert_eq!(tileset_details.maxzoom.unwrap(), 1);
+        assert_eq!(metadata.tilejson.name.unwrap(), "Geography Class");
+        assert_eq!(metadata.tilejson.version.unwrap(), "1.0.0");
+        assert_eq!(metadata.tilejson.minzoom.unwrap(), 0);
+        assert_eq!(metadata.tilejson.maxzoom.unwrap(), 1);
         assert_eq!(
-            tileset_details.bounds.unwrap(),
-            vec![-180.0, -85.0511, 180.0, 85.0511]
+            metadata.tilejson.bounds.unwrap(),
+            Bounds::new(-180.0, -85.0511, 180.0, 85.0511)
         );
-        assert_eq!(tileset_details.center.unwrap(), vec![0.0, 20.0, 0.0]);
-        assert_eq!(tileset_details.tile_format, DataFormat::Png);
+        assert_eq!(metadata.tilejson.center.unwrap(), Center::new(0.0, 20.0, 0));
+        assert_eq!(metadata.tile_format, DataFormat::Png);
 
-        let tileset_details = get_tile_details(
+        let metadata = get_tile_details(
             &PathBuf::from("./tiles/world_cities.mbtiles"),
             "world_cities",
         )
         .unwrap();
         // The rhs values are from metadata table of world_cities.mbtiles
         assert_eq!(
-            tileset_details.name.unwrap(),
+            metadata.tilejson.name.unwrap(),
             "Major cities from Natural Earth data"
         );
-        assert_eq!(tileset_details.version.unwrap(), "2");
-        assert_eq!(tileset_details.minzoom.unwrap(), 0);
-        assert_eq!(tileset_details.maxzoom.unwrap(), 6);
+        assert_eq!(metadata.tilejson.version.unwrap(), "2");
+        assert_eq!(metadata.tilejson.minzoom.unwrap(), 0);
+        assert_eq!(metadata.tilejson.maxzoom.unwrap(), 6);
         assert_eq!(
-            tileset_details.bounds.unwrap(),
-            vec![-123.123590, -37.818085, 174.763027, 59.352706]
+            metadata.tilejson.bounds.unwrap(),
+            Bounds::new(-123.123590, -37.818085, 174.763027, 59.352706)
         );
         assert_eq!(
-            tileset_details.center.unwrap(),
-            vec![-75.937500, 38.788894, 6.0]
+            metadata.tilejson.center.unwrap(),
+            Center::new(-75.937500, 38.788894, 6)
         );
-        assert_eq!(tileset_details.tile_format, DataFormat::Pbf);
+        assert_eq!(metadata.tile_format, DataFormat::Pbf);
     }
 }

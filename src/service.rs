@@ -231,42 +231,39 @@ pub async fn get_service(
                     None => String::new(),
                 };
 
-                let mut tile_meta_json = json!({
-                    "name": tile_meta.name,
-                    "version": tile_meta.version,
-                    "tiles": vec![format!(
-                        "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.{format}{query_string}",
-                        format=tile_meta.tile_format.format()
-                    )],
-                    "tilejson": tile_meta.tilejson,
-                    "scheme": tile_meta.scheme,
-                    "id": tile_meta.id,
-                    "format": tile_meta.tile_format,
-                    "grids": tile_meta.grid_format.map(|_| vec![format!(
-                        "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.json{query_string}",
-                    )]),
-                    "bounds": tile_meta.bounds,
-                    "center": tile_meta.center,
-                    "minzoom": tile_meta.minzoom,
-                    "maxzoom": tile_meta.maxzoom,
-                    "description": tile_meta.description,
-                    "attribution": tile_meta.attribution,
-                    "type": tile_meta.layer_type,
-                    "legend": tile_meta.legend,
-                    "template": tile_meta.template,
-                });
+                let mut tilejson = tile_meta.tilejson.clone();
+                tilejson.tiles[0] = format!(
+                    "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.{format}{query_string}",
+                    format = tile_meta.tile_format.format()
+                );
+                tilejson.other.insert("id".to_string(), json!(tile_meta.id));
+                tilejson
+                    .other
+                    .insert("format".to_string(), json!(tile_meta.tile_format));
+                tilejson.other.insert(
+                    "grids".to_string(),
+                    json!(tile_meta.grid_format.map(|_| vec![format!(
+                        "{base_url}/{tile_name}/tiles/{{z}}/{{x}}/{{y}}.json{query_string}"
+                    )])),
+                );
+                tilejson
+                    .other
+                    .insert("type".to_string(), json!(tile_meta.layer_type));
                 if let Some(json_data) = tile_meta.json {
                     for (k, v) in json_data.as_object().unwrap() {
-                        tile_meta_json[k] = v.clone();
+                        tilejson.other.insert(k.to_string(), v.clone());
                     }
                 }
                 if !disable_preview {
-                    tile_meta_json["map"] = json!(format!("{base_url}/{tile_name}/map"));
+                    tilejson.other.insert(
+                        "map".to_string(),
+                        json!(format!("{base_url}/{tile_name}/map")),
+                    );
                 }
 
                 return Ok(Response::builder()
                     .header(CONTENT_TYPE, "application/json")
-                    .body(Body::from(serde_json::to_string(&tile_meta_json).unwrap()))
+                    .body(Body::from(serde_json::to_string(&tilejson).unwrap()))
                     .unwrap()); // TODO handle error
             }
         }

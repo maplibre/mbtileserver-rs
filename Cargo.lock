@@ -413,6 +413,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempdir",
+ "tilejson",
  "tokio",
 ]
 
@@ -750,6 +751,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_tuple"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4f025b91216f15a2a32aa39669329a475733590a015835d1783549a56d09427"
+dependencies = [
+ "serde",
+ "serde_tuple_macros",
+]
+
+[[package]]
+name = "serde_tuple_macros"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4076151d1a2b688e25aaf236997933c66e18b870d0369f8b248b8ab2be630d7e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -821,6 +843,16 @@ name = "textwrap"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1141d4d61095b28419e22cb0bbf02755f5e54e0526f97f1e3d1d160e60885fb"
+
+[[package]]
+name = "tilejson"
+version = "0.2.5-alpha.0"
+source = "git+https://github.com/nyurik/tilejson?branch=rfctr#74759a49fe416be71cbefe7ad95247ccd7ca3b23"
+dependencies = [
+ "serde",
+ "serde_json",
+ "serde_tuple",
+]
 
 [[package]]
 name = "tokio"
