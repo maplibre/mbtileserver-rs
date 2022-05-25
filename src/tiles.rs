@@ -283,44 +283,47 @@ mod tests {
 
     #[test]
     fn get_tileset_metadata() {
-        let metadata = get_tile_details(
+        let tileset_details = get_tile_details(
             &PathBuf::from("./tiles/geography-class-png.mbtiles"),
             "geography-class-png",
         )
         .unwrap();
         // The rhs values are from metadata table of geography-class-png.mbtiles
-        assert_eq!(metadata.tilejson.name.unwrap(), "Geography Class");
-        assert_eq!(metadata.tilejson.version.unwrap(), "1.0.0");
-        assert_eq!(metadata.tilejson.minzoom.unwrap(), 0);
-        assert_eq!(metadata.tilejson.maxzoom.unwrap(), 1);
+        assert_eq!(tileset_details.tilejson.name.unwrap(), "Geography Class");
+        assert_eq!(tileset_details.tilejson.version.unwrap(), "1.0.0");
+        assert_eq!(tileset_details.tilejson.minzoom.unwrap(), 0);
+        assert_eq!(tileset_details.tilejson.maxzoom.unwrap(), 1);
         assert_eq!(
-            metadata.tilejson.bounds.unwrap(),
+            tileset_details.tilejson.bounds.unwrap(),
             Bounds::new(-180.0, -85.0511, 180.0, 85.0511)
         );
-        assert_eq!(metadata.tilejson.center.unwrap(), Center::new(0.0, 20.0, 0));
-        assert_eq!(metadata.tile_format, DataFormat::Png);
+        assert_eq!(
+            tileset_details.tilejson.center.unwrap(),
+            Center::new(0.0, 20.0, 0)
+        );
+        assert_eq!(tileset_details.tile_format, DataFormat::Png);
 
-        let metadata = get_tile_details(
+        let tileset_details = get_tile_details(
             &PathBuf::from("./tiles/world_cities.mbtiles"),
             "world_cities",
         )
         .unwrap();
         // The rhs values are from metadata table of world_cities.mbtiles
         assert_eq!(
-            metadata.tilejson.name.unwrap(),
+            tileset_details.tilejson.name.unwrap(),
             "Major cities from Natural Earth data"
         );
-        assert_eq!(metadata.tilejson.version.unwrap(), "2");
-        assert_eq!(metadata.tilejson.minzoom.unwrap(), 0);
-        assert_eq!(metadata.tilejson.maxzoom.unwrap(), 6);
+        assert_eq!(tileset_details.tilejson.version.unwrap(), "2");
+        assert_eq!(tileset_details.tilejson.minzoom.unwrap(), 0);
+        assert_eq!(tileset_details.tilejson.maxzoom.unwrap(), 6);
         assert_eq!(
-            metadata.tilejson.bounds.unwrap(),
+            tileset_details.tilejson.bounds.unwrap(),
             Bounds::new(-123.123590, -37.818085, 174.763027, 59.352706)
         );
         assert_eq!(
-            metadata.tilejson.center.unwrap(),
+            tileset_details.tilejson.center.unwrap(),
             Center::new(-75.937500, 38.788894, 6)
         );
-        assert_eq!(metadata.tile_format, DataFormat::Pbf);
+        assert_eq!(tileset_details.tile_format, DataFormat::Pbf);
     }
 }
