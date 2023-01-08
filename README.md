@@ -11,7 +11,7 @@ A simple Rust-based server for map tiles stored in mbtiles format.
 
 ### Getting Involved
 
-Join the #maplibre slack channel at OSMUS: get an invite at https://osmus-slack.herokuapp.com/
+Join the #maplibre slack channel at OSMUS: get an invite at [slack.openstreetmap.us](https://slack.openstreetmap.us/)
 
 ## Usage
 
