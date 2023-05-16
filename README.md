@@ -1,6 +1,10 @@
+# DEPRECATED
+The functionality of the `mbtileserver-rs` has been migrated to the [Martin tile server](https://github.com/maplibre/martin). No further updates are planned for this project. 
+
+
 > Note: This project started as a partial implementation of the API and features provided by [mbtileserver](https://github.com/consbio/mbtileserver) written in Go by [Brendan Ward](https://github.com/brendan-ward). It might diverge from that project in the future.
 
-# mbtileserver
+### mbtileserver
 
 [![Crates.io](https://img.shields.io/crates/v/mbtileserver.svg)](https://crates.io/crates/mbtileserver)
 [![Coverage Status](https://coveralls.io/repos/github/maplibre/mbtileserver-rs/badge.svg)](https://coveralls.io/github/maplibre/mbtileserver-rs)

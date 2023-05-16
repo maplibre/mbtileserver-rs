@@ -1,3 +1,6 @@
+### v0.1.8
+- Deprecated
+
 ### v0.1.7
 
 - Updated dependencies and tested with Rust 1.54
